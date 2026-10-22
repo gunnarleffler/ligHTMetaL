@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>MaiDEn — Markdown editor skins</title>
+    <link rel="stylesheet" href="../dist/lightmetal.css">
+    <link rel="stylesheet" href="../dist/skins/bootstrap.css">
+    <link rel="stylesheet" href="../dist/skins/material-classic.css">
+    <link rel="stylesheet" href="../dist/skins/material-outline.css">
+    <link rel="stylesheet" href="../dist/skins/frost.css">
+    <link rel="stylesheet" href="../dist/skins/patina.css">
+    <link rel="stylesheet" href="../dist/skins/sterling.css">
+    <link rel="stylesheet" href="../dist/skins/substantial.css">
+    <link rel="stylesheet" href="../dist/maiden.css">
+    <style>
+      :root {
+        color-scheme: light;
+        --page-bg: #f4f6f8;
+        --page-fg: #263344;
+        --page-dim: #536172;
+      }
+      :root[data-mode="dark"] {
+        color-scheme: dark;
+        --page-bg: #10171e;
+        --page-fg: #e8eef4;
+        --page-dim: #aebdcb;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root:not([data-mode="light"]) {
+          color-scheme: dark;
+          --page-bg: #10171e;
+          --page-fg: #e8eef4;
+          --page-dim: #aebdcb;
+        }
+      }
+      body {
+        margin: 0 auto;
+        max-width: 1560px;
+        padding: 32px;
+        font: 16px/1.5 system-ui, sans-serif;
+        background: var(--page-bg);
+        color: var(--page-fg);
+      }
+      h1 { margin: 0; }
+      h2 { margin: 0 0 6px; }
+      header {
+        max-width: 75ch;
+        margin: 0 auto 32px;
+        text-align: center;
+      }
+      header .logo {
+        display: block;
+        width: 320px;
+        max-width: 100%;
+        height: auto;
+        margin: 16px auto;
+      }
+      a { color: inherit; }
+      select { margin-left: 8px; padding: 6px 10px; font: inherit; }
+      main { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 32px; }
+      section { min-width: 0; }
+      section > p { margin: 0 0 12px; color: var(--page-dim); }
+      @media (max-width: 900px) {
+        body { padding: 20px; }
+        main { grid-template-columns: minmax(0, 1fr); }
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>MaiDEn — Markdown editor skins</h1>
+      <img class="logo" src="../ligHTMetaL.png" alt="ligHTMetaL logo" width="320">
+      <p>Same editor, different surfaces. Original ligHTMetaL CSS, with no dependencies
+        or external fonts. All icons and editing stay local.</p>
+      <p>Try source formatting, Preview, Side-by-side, and Fullscreen in every skin.
+        <a href="markdown.html">Markdown editor &amp; quickstart</a> · <a href="skins.html">HTML skins</a> · <a href="index.html">All three libraries</a></p>
+      <p>Load shared CSS, then your chosen skin CSS, then MaiDEn CSS. Add the skin class to the editor host, such as <code>lightmetal lightmetal-substantial</code>.</p>
+      <label for="palette">Color mode</label>
+      <select id="palette">
+        <option value="auto">Follow system</option>
+        <option value="light">Light</option>
+        <option value="dark">Dark</option>
+      </select>
+    </header>
+    <main id="gallery"></main>
+    <script src="../dist/MeltDown.js"></script>
+    <script src="../dist/maiden.js"></script>
+    <script>
+      const skinChoices = [
+        ["default", "Default", "The existing ligHTMetaL appearance, unchanged."],
+        ["bootstrap", "Bootstrap", "Blue accents and familiar form-control proportions."],
+        ["material-classic", "Material Classic", "Filled surfaces, circular buttons, and a strong baseline."],
+        ["material-outline", "Material Outline", "An outlined frame and clearly marked active controls."],
+        ["frost", "Frost", "Spacious layout, cool colors, and lighter icon strokes."],
+        ["patina", "Patina", "Crisp toolbar chrome with blue accents."],
+        ["sterling", "Sterling", "Compact, neutral toolbar chrome."],
+        ["substantial", "Substantial", "Premium developer-tool chrome. Generous proportions, commanding presence, and frankly, a pretty substantial amount of visual equity."]
+      ];
+      const sampleMarkdown = '# A place for your ideas\n\nKeep the **markers**. Keep your content your own.\n\n- Local-first writing\n- Native undo\n\n```js\nconst idea = "yours";\n```\n\n| Project | Status |\n| --- | --- |\n| MaiDEn | Ready to write |';
+      window.__skinEditors = {};
+      for (const [name, title, description] of skinChoices) {
+        const card = document.createElement("section");
+        const heading = document.createElement("h2");
+        heading.textContent = title;
+        const note = document.createElement("p");
+        note.textContent = description;
+        const host = document.createElement("div");
+        host.id = "skin-" + name;
+        host.className = "lightmetal" + (name === "default" ? "" : " lightmetal-" + name);
+        card.append(heading, note, host);
+        document.getElementById("gallery").appendChild(card);
+        const editor = maiden.init({ element: host, preview: { render: meltDown.parse } });
+        editor.setMarkdown(sampleMarkdown);
+        window.__skinEditors[name] = editor;
+      }
+      document.getElementById("palette").addEventListener("change", (event) => {
+        const mode = event.target.value;
+        document.documentElement.dataset.mode = mode;
+        for (const editor of Object.values(window.__skinEditors)) {
+          editor.element.classList.toggle("lightmetal-light", mode === "light");
+          editor.element.classList.toggle("lightmetal-dark", mode === "dark");
+        }
+      });
+    </script>
+  </body>
+</html>

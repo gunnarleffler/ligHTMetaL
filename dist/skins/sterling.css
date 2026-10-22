@@ -1,0 +1,74 @@
+/* Compact, neutral toolbar chrome. Original ligHTMetaL CSS.
+ * Load after lightmetal.css. Add lightmetal-sterling to the editor host.
+ */
+.lightmetal.lightmetal-sterling {
+  --lightmetal-bg: #ffffff;
+  --lightmetal-bg-toolbar: #eaecef;
+  --lightmetal-border: #abb2bc;
+  --lightmetal-color: #303844;
+  --lightmetal-color-dim: #4b5562;
+  --lightmetal-hover: #dce0e6;
+  --lightmetal-accent: #315c9b;
+  --lightmetal-accent-soft: #dce8f8;
+  --lightmetal-error-fg: #b42318;
+  --lightmetal-error-bg: #fdecea;
+  color-scheme: light;
+  font-family: system-ui, sans-serif;
+  border-radius: 3px;
+}
+
+.lightmetal.lightmetal-sterling.lightmetal-dark {
+  --lightmetal-bg: #202329;
+  --lightmetal-bg-toolbar: #30353e;
+  --lightmetal-border: #697380;
+  --lightmetal-color: #f2f3f5;
+  --lightmetal-color-dim: #c3cad4;
+  --lightmetal-hover: #444c58;
+  --lightmetal-accent: #adcaff;
+  --lightmetal-accent-soft: #3b4f6e;
+  --lightmetal-error-fg: #ffb4ad;
+  --lightmetal-error-bg: #532924;
+  color-scheme: dark;
+}
+
+@media (prefers-color-scheme: dark) {
+  .lightmetal.lightmetal-sterling:not(.lightmetal-light) {
+    --lightmetal-bg: #202329;
+    --lightmetal-bg-toolbar: #30353e;
+    --lightmetal-border: #697380;
+    --lightmetal-color: #f2f3f5;
+    --lightmetal-color-dim: #c3cad4;
+    --lightmetal-hover: #444c58;
+    --lightmetal-accent: #adcaff;
+    --lightmetal-accent-soft: #3b4f6e;
+    --lightmetal-error-fg: #ffb4ad;
+    --lightmetal-error-bg: #532924;
+    color-scheme: dark;
+  }
+}
+
+.lightmetal-sterling .lightmetal-actionbar {
+  gap: 2px;
+  padding: 4px;
+  background-image: linear-gradient(to bottom, rgba(255, 255, 255, 0.12), transparent);
+}
+
+.lightmetal-sterling .lightmetal-button {
+  width: 32px;
+  height: 28px;
+  border-radius: 2px;
+}
+
+.lightmetal-sterling .lightmetal-button-selected {
+  box-shadow: inset 0 0 0 1px var(--lightmetal-accent);
+}
+
+.lightmetal-sterling .lightmetal-table-button,
+.lightmetal-sterling .lightmetal-table-dropdown {
+  border-radius: 2px;
+}
+
+.lightmetal-sterling .lightmetal-content,
+.lightmetal-sterling .lightmetal-sources {
+  padding: 14px;
+}

@@ -1,0 +1,29 @@
+{
+  "standard": "CommonMark 0.31.2",
+  "description": "Reference links/images and definition boundaries. Source stays visible and inert.",
+  "cases": [
+    { "name": "Empty definition destinations keep closing markers", "markdown": "[metal]: <>\n\n[metal]", "headings": [0, 0, 0], "marker": ["[metal]: <", ">", "[", "]"], "link": ["metal"] },
+    { "name": "Empty definition titles keep closing markers", "markdown": "[metal]: /local \"\"\n\n[metal]", "headings": [0, 0, 0], "marker": ["[metal]: ", " \"", "\"", "[", "]"], "link": ["metal"], "url": ["/local"] },
+    { "name": "Multiline definition destination and title", "markdown": "[metal]:\n/local\n\"first\nlast\"\n\n[metal]", "headings": [0, 0, 0, 0, 0, 0], "marker": ["[metal]:", "\"", "\"", "[", "]"], "link": ["metal"], "url": ["/local", "first", "last"] },
+    { "name": "Definition before a non-one ordered start", "markdown": "[metal]: /local\n2. [metal]", "headings": [0, 0], "marker": ["[metal]: ", "2. ", "[", "]"], "link": ["metal"], "url": ["/local"] },
+    { "name": "Definition before indented code", "markdown": "[metal]: /local\n    [metal]", "headings": [0, 0], "marker": ["[metal]: "], "code": ["    [metal]"], "url": ["/local"] },
+    { "name": "Indented title belongs to definition", "markdown": "[metal]: /local\n    \"title\"\n\n[metal]", "headings": [0, 0, 0, 0], "marker": ["[metal]: ", "    \"", "\"", "[", "]"], "link": ["metal"], "url": ["/local", "title"] },
+    { "name": "Definitions are document wide across quotes", "markdown": "> [metal]: /local\n\n[metal]", "headings": [0, 0, 0], "marker": ["> ", "[metal]: ", "[", "]"], "link": ["metal"], "url": ["/local"] },
+    { "name": "Repeated definitions stay visible", "markdown": "[metal]: /first\n[METAL]: /second\n\n[metal]", "headings": [0, 0, 0, 0], "marker": ["[metal]: ", "[METAL]: ", "[", "]"], "link": ["metal"], "url": ["/first", "/second"] },
+    { "name": "Invalid same-line title rejects definition", "markdown": "[metal]: /local \"bad\n\n[metal]", "headings": [0, 0, 0] },
+    { "name": "Invalid next-line title leaves valid definition", "markdown": "[metal]: /local\n\"bad\n\n[metal]", "headings": [0, 0, 0, 0], "marker": ["[metal]: ", "[", "]"], "link": ["metal"], "url": ["/local"] },
+    { "name": "Reference label emphasis is scoped", "markdown": "*[metal*][ref]\n\n[ref]: /local", "headings": [0, 0, 0], "marker": ["[", "][ref]", "[ref]: "], "link": ["metal*"], "url": ["/local"] },
+    { "name": "Forward shortcut reference", "markdown": "[metal]\n\n[metal]: /local", "headings": [0, 0, 0], "marker": ["[", "]", "[metal]: "], "link": ["metal"], "url": ["/local"] },
+    { "name": "Full and collapsed references", "markdown": "[warm][metal] [metal][]\n\n[metal]: /local", "headings": [0, 0, 0], "marker": ["[", "][metal]", "[", "][]", "[metal]: "], "link": ["warm", "metal"], "url": ["/local"] },
+    { "name": "Reference images stay inert", "markdown": "![metal][ref]\n\n[ref]: https://example.invalid/image.png", "headings": [0, 0, 0], "marker": ["![", "][ref]", "[ref]: "], "link": ["metal"], "url": ["https://example.invalid/image.png"] },
+    { "name": "Labels fold Unicode case and whitespace", "markdown": "[STRASSE  metal]\n\n[Straße metal]: /local", "headings": [0, 0, 0], "marker": ["[", "]", "[Straße metal]: "], "link": ["STRASSE  metal"], "url": ["/local"] },
+    { "name": "Definitions cannot interrupt ordinary paragraphs", "markdown": "body\n[metal]: /local\n\n[metal]", "headings": [0, 0, 0, 0] },
+    { "name": "Definitions are removed before Setext recognition", "markdown": "[metal]: /local\n---\n[metal]", "headings": [0, 0, 0], "marker": ["[metal]: ", "---", "[", "]"], "link": ["metal"], "url": ["/local"] },
+    { "name": "Remaining paragraph can become Setext", "markdown": "[metal]: /local\n[metal]\n===", "headings": [0, 1, 0], "marker": ["[metal]: ", "[", "]", "==="], "link": ["metal"], "url": ["/local"] },
+    { "name": "Headings resolve forward references", "markdown": "# [metal]\n\n[metal]: /local", "headings": [1, 0, 0], "marker": ["# ", "[", "]", "[metal]: "], "link": ["metal"], "url": ["/local"] },
+    { "name": "Definition titles stay literal", "markdown": "[metal]: <local path> \"**title**\"\n\n[metal]", "headings": [0, 0, 0], "marker": ["[metal]: <", "> \"", "\"", "[", "]"], "link": ["metal"], "url": ["local path", "**title**"] },
+    { "name": "Code does not define references", "markdown": "```\n[metal]: /local\n```\n[metal]", "headings": [0, 0, 0, 0], "marker": ["```", "```"], "code": ["[metal]: /local"] },
+    { "name": "Unknown explicit label blocks shortcut fallback", "markdown": "[metal][unknown]\n\n[metal]: /local", "headings": [0, 0, 0], "marker": ["[metal]: "], "url": ["/local"] },
+    { "name": "Escaped brackets match without decoding", "markdown": "[warm\\]metal]\n\n[warm\\]metal]: /local", "headings": [0, 0, 0], "marker": ["[", "]", "[warm\\]metal]: "], "link": ["warm\\]metal"], "url": ["/local"] }
+  ]
+}

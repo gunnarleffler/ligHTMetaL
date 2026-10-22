@@ -1,0 +1,74 @@
+/* Filled Material Design-inspired surfaces. Original ligHTMetaL CSS.
+ * Load after lightmetal.css. Add lightmetal-material-classic to the host.
+ */
+.lightmetal.lightmetal-material-classic {
+  --lightmetal-bg: #ffffff;
+  --lightmetal-bg-toolbar: #f3f1f8;
+  --lightmetal-border: #b7b0c4;
+  --lightmetal-color: #292332;
+  --lightmetal-color-dim: #60566b;
+  --lightmetal-hover: #e8e2f0;
+  --lightmetal-accent: #653a91;
+  --lightmetal-accent-soft: #eee3fa;
+  --lightmetal-error-fg: #b42318;
+  --lightmetal-error-bg: #fdecea;
+  color-scheme: light;
+  font-family: system-ui, sans-serif;
+  border-width: 0 0 2px;
+  border-radius: 12px 12px 0 0;
+  box-shadow: 0 2px 8px var(--lightmetal-accent-soft);
+}
+
+.lightmetal.lightmetal-material-classic.lightmetal-dark {
+  --lightmetal-bg: #211d26;
+  --lightmetal-bg-toolbar: #2d2736;
+  --lightmetal-border: #6f647d;
+  --lightmetal-color: #f2ecf8;
+  --lightmetal-color-dim: #c9bed5;
+  --lightmetal-hover: #40354d;
+  --lightmetal-accent: #d4b1ff;
+  --lightmetal-accent-soft: #483257;
+  --lightmetal-error-fg: #ffb4ad;
+  --lightmetal-error-bg: #532924;
+  color-scheme: dark;
+}
+
+@media (prefers-color-scheme: dark) {
+  .lightmetal.lightmetal-material-classic:not(.lightmetal-light) {
+    --lightmetal-bg: #211d26;
+    --lightmetal-bg-toolbar: #2d2736;
+    --lightmetal-border: #6f647d;
+    --lightmetal-color: #f2ecf8;
+    --lightmetal-color-dim: #c9bed5;
+    --lightmetal-hover: #40354d;
+    --lightmetal-accent: #d4b1ff;
+    --lightmetal-accent-soft: #483257;
+    --lightmetal-error-fg: #ffb4ad;
+    --lightmetal-error-bg: #532924;
+    color-scheme: dark;
+  }
+}
+
+.lightmetal.lightmetal-material-classic:focus-within {
+  border-color: var(--lightmetal-accent);
+}
+
+.lightmetal-material-classic .lightmetal-actionbar {
+  gap: 4px;
+  padding: 8px;
+  border-bottom: none;
+}
+
+.lightmetal-material-classic .lightmetal-button {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+}
+
+.lightmetal-material-classic .lightmetal-table-button {
+  border-radius: 18px;
+}
+
+.lightmetal-material-classic .lightmetal-table-dropdown {
+  border-radius: 12px;
+}

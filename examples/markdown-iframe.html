@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ligHTMetaL::MaiDEn — the lightMarkDown Editor — iframe example</title>
+  <style>
+    :root { color-scheme: light dark; }
+    body { max-width: 900px; margin: 0 auto; padding: 24px; font: 16px/1.6 system-ui, sans-serif; }
+    a { color: inherit; }
+    iframe { box-sizing: border-box; display: block; width: 100%; height: 420px; border: 1px solid; border-radius: 6px; }
+    textarea, pre { box-sizing: border-box; width: 100%; padding: 12px; font: 14px/1.6 ui-monospace, monospace; }
+    pre { white-space: pre-wrap; overflow-wrap: anywhere; border: 1px solid; border-radius: 6px; }
+    button { font: inherit; margin: 8px 8px 8px 0; }
+    @media (max-width: 600px) { body { padding: 16px; } }
+  </style>
+</head>
+<body>
+  <h1>Run the whole Markdown editor in an iframe</h1>
+  <p>The toolbar and writing area share one iframe. The library stays unchanged:
+    its normal, synchronous <code>init()</code> runs inside that document.</p>
+  <p><a href="markdown.html">Inline editor</a> · <a href="markdown.html?mode=isolated">Parent-toolbar experiment</a></p>
+  <p id="frame-status" role="status">Loading the editor…</p>
+  <iframe id="isolated-editor" title="Isolated Markdown editor"></iframe>
+  <button id="read-markdown" type="button" disabled>Read Markdown from the frame</button>
+  <button id="load-markdown" type="button" disabled>Load a sample from the parent</button>
+  <p>Loading a sample replaces the document, not a native undo step.</p>
+  <label>Application note, outside the iframe
+    <textarea id="application-note">Outside the editor.</textarea>
+  </label>
+  <p>Type in the editor, then in the note, and try the editor's Undo.
+    Tested Chromium and Firefox keep these histories separate.
+    <strong>Linux WebKit can undo the note instead, even across frames.</strong>
+    Check your target browser before relying on iframe history isolation.</p>
+  <h2>Markdown reported to the parent</h2>
+  <pre id="frame-output" tabindex="0" aria-label="Markdown from the iframe"></pre>
+  <p>Parent code waits for the frame to load before calling its API. The
+    <code>markdownchange</code> event is example glue, not a library event.</p>
+  <p>This same-origin frame is not a security sandbox or a cross-browser history guarantee. All
+    assets stay local. The static template below contains no user Markdown;
+    document text goes through <code>setMarkdown()</code>, never into <code>srcdoc</code>.</p>
+  <template id="editor-document">
+    <meta charset="utf-8">
+    <link rel="stylesheet" href="../dist/lightmetal.css">
+    <link rel="stylesheet" href="../dist/maiden.css">
+    <style>
+      .lightmarkdown { display: flex; flex-direction: column; height: 100vh; }
+      .lightmarkdown-scroll { flex: 1; height: auto; min-height: 0; }
+      .lightmarkdown-preview { height: auto; min-height: 0; flex: 1; }
+      .lightmarkdown.lightmarkdown-split { grid-template-rows: auto minmax(0, 1fr) auto; }
+      @media (max-width: 640px) {
+        .lightmarkdown.lightmarkdown-split { grid-template-rows: auto minmax(0, 1fr) minmax(0, 1fr) auto; }
+      }
+      .lightmarkdown-keyboard-hint { flex-shrink: 0; }
+    </style>
+    <div id="editor"></div>
+    <script src="../dist/maiden.js"></script>
+    <script src="../examples/markdown-iframe-editor.js"></script>
+  </template>
+  <script>
+    const frame = document.getElementById("isolated-editor");
+    const output = document.createTextNode("");
+    document.getElementById("frame-output").append(output);
+    frame.addEventListener("markdownchange", event => { output.data = event.detail; });
+    frame.addEventListener("load", () => {
+      const editor = frame.contentWindow.__markdownEditor;
+      if (!editor) {
+        if (frame.contentDocument.URL !== "about:blank") document.getElementById("frame-status").textContent = "The editor could not load. Check the local assets.";
+        return;
+      }
+      document.getElementById("read-markdown").disabled = false;
+      document.getElementById("load-markdown").disabled = false;
+      document.getElementById("frame-status").textContent = "Ready. The editor runs inside the frame; native undo scope depends on the browser.";
+      output.data = editor.getMarkdown();
+    });
+    document.getElementById("read-markdown").addEventListener("click", () => {
+      output.data = frame.contentWindow.__markdownEditor.getMarkdown();
+    });
+    document.getElementById("load-markdown").addEventListener("click", () => {
+      frame.contentWindow.__markdownEditor.setMarkdown("## Loaded by the parent\n\nStill plain **Markdown**. 🦊\n");
+    });
+    // A trusted, static template keeps file:// use same-origin too. Do not
+    // interpolate document text into this HTML. A hosted child page also works
+    // when it shares the parent's origin and loads its own JS and CSS.
+    frame.srcdoc = "<!doctype html>" + document.getElementById("editor-document").innerHTML;
+  </script>
+</body>
+</html>

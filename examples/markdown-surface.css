@@ -1,0 +1,27 @@
+/* Demo-only isolated writing surface. Not part of the public editor bundles. */
+.lightmarkdown > .lightmarkdown-surface-frame {
+  display: block;
+  width: 100%;
+  height: var(--lightmarkdown-height);
+  border: 0;
+}
+html[data-lightmarkdown-surface] body {
+  max-width: none;
+  margin: 0;
+  padding: 0;
+  background: transparent;
+}
+html[data-lightmarkdown-surface] .lightmarkdown {
+  display: flex;
+  flex-direction: column;
+  height: var(--lightmarkdown-height);
+  border: 0;
+  border-radius: 0;
+}
+html[data-lightmarkdown-surface] .lightmarkdown-scroll { flex: 1; height: auto; min-height: 0; }
+html[data-lightmarkdown-surface] .lightmarkdown-preview { height: auto; min-height: 0; }
+html[data-lightmarkdown-surface] .lightmarkdown-keyboard-hint { flex-shrink: 0; }
+html[data-lightmarkdown-surface] .lightmarkdown.lightmarkdown-split { grid-template-rows: auto minmax(0, 1fr) auto; }
+@media (max-width: 640px) {
+  html[data-lightmarkdown-surface] .lightmarkdown.lightmarkdown-split { grid-template-rows: auto minmax(0, 1fr) minmax(0, 1fr) auto; }
+}

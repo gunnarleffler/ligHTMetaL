@@ -1,0 +1,61 @@
+/* Premium developer-tool chrome. Generous proportions, commanding presence,
+ * and frankly, a pretty substantial amount of visual equity.
+ * Original ligHTMetaL CSS.
+ * Load after lightmetal.css. Add lightmetal-substantial to the editor host.
+ */
+.lightmetal.lightmetal-substantial {
+  --lightmetal-bg-toolbar: #f3f5f7;
+  --lightmetal-border: #c5ccd6;
+  --lightmetal-color-dim: #5f6874;
+  --lightmetal-accent: #435dc6;
+  --lightmetal-accent-soft: #e0e5f5;
+}
+
+.lightmetal.lightmetal-substantial.lightmetal-dark {
+  --lightmetal-bg-toolbar: #22262d;
+  --lightmetal-border: #424a56;
+  --lightmetal-color-dim: #9aa4b2;
+  --lightmetal-accent: #8fa0ff;
+  --lightmetal-accent-soft: #30394d;
+}
+
+@media (prefers-color-scheme: dark) {
+  .lightmetal.lightmetal-substantial:not(.lightmetal-light) {
+    --lightmetal-bg-toolbar: #22262d;
+    --lightmetal-border: #424a56;
+    --lightmetal-color-dim: #9aa4b2;
+    --lightmetal-accent: #8fa0ff;
+    --lightmetal-accent-soft: #30394d;
+  }
+}
+
+.lightmetal-substantial .lightmetal-actionbar {
+  gap: 3px;
+  padding: 7px 6px;
+}
+
+.lightmetal-substantial .lightmetal-button {
+  width: 32px;
+  height: 32px;
+}
+
+.lightmetal-substantial .lightmetal-button svg {
+  width: 20px;
+  height: 20px;
+}
+
+.lightmetal-substantial .lightmetal-toolbar-separator,
+.lightmetal-substantial .lightmarkdown-separator {
+  height: 20px;
+}
+
+.lightmetal-substantial .lightmarkdown-footer {
+  min-height: 29px;
+  align-items: center;
+  background: var(--lightmetal-bg-toolbar);
+}
+
+.lightmetal-substantial .lightmarkdown-keyboard-hint,
+.lightmetal-substantial .lightmarkdown-status {
+  padding: 5px 10px;
+}

@@ -1,0 +1,271 @@
+{
+  "standard": "CommonMark 0.31.2",
+  "description": "Original source-highlighting cases for nested containers, relative indentation, and lazy continuations. Not a conformance suite.",
+  "cases": [
+    {
+      "name": "Quoted headings and inline emphasis",
+      "markdown": "> # Title\n> paragraph **bold**",
+      "headings": [1, 0],
+      "marker": ["> ", "# ", "> ", "**", "**"],
+      "bold": ["bold"]
+    },
+    {
+      "name": "A heading inside a quote inside a list",
+      "markdown": "- > ## Title",
+      "headings": [2],
+      "marker": ["- > ", "## "]
+    },
+    {
+      "name": "Quoted fences keep syntax-looking contents literal",
+      "markdown": "> ```md\n> ## literal\n> **literal**\n> ```\n> # after",
+      "headings": [0, 0, 0, 0, 1],
+      "marker": ["> ", "```md", "> ", "> ", "> ", "```", "> ", "# "],
+      "code": ["## literal", "**literal**"]
+    },
+    {
+      "name": "List fences keep quotes and lists literal",
+      "markdown": "- ```\n  > literal\n  - literal\n  ```\n\n# after",
+      "headings": [0, 0, 0, 0, 0, 1],
+      "marker": ["- ", "```", "```", "# "],
+      "code": ["> literal", "- literal"]
+    },
+    {
+      "name": "Fenced code in a list in a quote",
+      "markdown": "> - ```\n>   **literal**\n>   ```",
+      "headings": [0, 0, 0],
+      "marker": ["> - ", "```", "> ", "> ", "```"],
+      "code": ["**literal**"]
+    },
+    {
+      "name": "Fenced code in a quote in a list",
+      "markdown": "- > ```\n  > **literal**\n  > ```",
+      "headings": [0, 0, 0],
+      "marker": ["- > ", "```", "> ", "> ", "```"],
+      "code": ["**literal**"]
+    },
+    {
+      "name": "Fenced code in nested quotes",
+      "markdown": ">> ```\n>> **literal**\n>> ```",
+      "headings": [0, 0, 0],
+      "marker": [">> ", "```", ">> ", ">> ", "```"],
+      "code": ["**literal**"]
+    },
+    {
+      "name": "Indented code is relative to both nested list items",
+      "markdown": "- outer\n  - inner\n\n        **literal**\n    plain",
+      "headings": [0, 0, 0, 0, 0],
+      "marker": ["- ", "- "],
+      "code": ["    **literal**"]
+    },
+    {
+      "name": "Five list-padding spaces leave four columns of code",
+      "markdown": "-     **literal**\n  normal *word*",
+      "headings": [0, 0],
+      "marker": ["- ", "*", "*"],
+      "code": ["    **literal**"],
+      "italic": ["word"]
+    },
+    {
+      "name": "Quoted code indentation counts a tab from its source column",
+      "markdown": "> \t  **literal**\n> normal",
+      "headings": [0, 0],
+      "marker": ["> ", "> "],
+      "code": ["\t  **literal**"]
+    },
+    {
+      "name": "A partially consumed indentation tab stays one source character",
+      "markdown": "- item\n\n  \t**paragraph**\n\n\t  **literal**",
+      "headings": [0, 0, 0, 0, 0],
+      "marker": ["- ", "**", "**"],
+      "code": ["  **literal**"],
+      "bold": ["paragraph"]
+    },
+    {
+      "name": "Tab list padding sets the continuation column",
+      "markdown": "-\t**bold**\n\tcontinued",
+      "headings": [0, 0],
+      "marker": ["-\t", "**", "**"],
+      "bold": ["bold"]
+    },
+    {
+      "name": "Setext heading inside a quote",
+      "markdown": "> Title\n> ---\n> after",
+      "headings": [2, 0, 0],
+      "marker": ["> ", "> ", "---", "> "]
+    },
+    {
+      "name": "A multiline Setext heading inside a list",
+      "markdown": "- Title\n  more\n  ===",
+      "headings": [1, 1, 0],
+      "marker": ["- ", "==="]
+    },
+    {
+      "name": "Setext heading inside a quoted list",
+      "markdown": "> - Title\n>   more\n>   ---",
+      "headings": [2, 2, 0],
+      "marker": ["> - ", "> ", "> ", "---"]
+    },
+    {
+      "name": "Code spans cross lazy quote continuations",
+      "markdown": "> `one\ncontinued`",
+      "headings": [0, 0],
+      "marker": ["> ", "`", "`"],
+      "code": ["one", "continued"]
+    },
+    {
+      "name": "Code spans cross lazy list continuations",
+      "markdown": "- `one\ncontinued`",
+      "headings": [0, 0],
+      "marker": ["- ", "`", "`"],
+      "code": ["one", "continued"]
+    },
+    {
+      "name": "Lazy nested quote lines can omit some or all prefixes",
+      "markdown": ">> **one\n> two\nthree**",
+      "headings": [0, 0, 0],
+      "marker": [">> ", "**", "> ", "**"],
+      "bold": ["one", "two", "three"]
+    },
+    {
+      "name": "An unquoted heading ends lazy continuation and inline spans",
+      "markdown": "> `one\n# Heading\nend`",
+      "headings": [0, 1, 0],
+      "marker": ["> ", "# "]
+    },
+    {
+      "name": "An unquoted line ends a quoted fence",
+      "markdown": "> ```\n**outside**\n```",
+      "headings": [0, 0, 0],
+      "marker": ["> ", "```", "**", "**", "```"],
+      "bold": ["outside"]
+    },
+    {
+      "name": "A new list item closes an unclosed item fence",
+      "markdown": "- ```\n  **literal**\n- **next**",
+      "headings": [0, 0, 0],
+      "marker": ["- ", "```", "- ", "**", "**"],
+      "code": ["**literal**"],
+      "bold": ["next"]
+    },
+    {
+      "name": "A relative closing fence restores inline styling",
+      "markdown": "- ```\n  ```\n  **after**",
+      "headings": [0, 0, 0],
+      "marker": ["- ", "```", "```", "**", "**"],
+      "bold": ["after"]
+    },
+    {
+      "name": "Explicit quote blanks split inline spans",
+      "markdown": "> `one\n>\n> end`",
+      "headings": [0, 0, 0],
+      "marker": ["> ", ">", "> "]
+    },
+    {
+      "name": "Blank list lines split inline spans",
+      "markdown": "- `one\n\n  end`",
+      "headings": [0, 0, 0],
+      "marker": ["- "]
+    },
+    {
+      "name": "Inline code cannot cross list item boundaries",
+      "markdown": "- `one\n- end`",
+      "headings": [0, 0],
+      "marker": ["- ", "- "]
+    },
+    {
+      "name": "Inline code cannot cross nested sibling items",
+      "markdown": "- one\n  - `two\n  - three`",
+      "headings": [0, 0, 0],
+      "marker": ["- ", "- ", "- "]
+    },
+    {
+      "name": "A lazy equals line is not a Setext underline",
+      "markdown": "> Title\n===\n> end",
+      "headings": [0, 0, 0],
+      "marker": ["> ", "> "]
+    },
+    {
+      "name": "An unquoted thematic break cannot underline quoted text",
+      "markdown": "> Title\n---\n# after",
+      "headings": [0, 0, 1],
+      "marker": ["> ", "---", "# "]
+    },
+    {
+      "name": "Nonempty items survive blank lines before nested paragraphs",
+      "markdown": "- one\n\n  Title\n  ---",
+      "headings": [0, 0, 2, 0],
+      "marker": ["- ", "---"]
+    },
+    {
+      "name": "A blank line closes an empty item",
+      "markdown": "-\n\n  Title\n  ---",
+      "headings": [0, 0, 2, 0],
+      "marker": ["-", "  ---"]
+    },
+    {
+      "name": "An empty item accepts immediate indented content",
+      "markdown": "-\n  # Title",
+      "headings": [0, 1],
+      "marker": ["-", "# "]
+    },
+    {
+      "name": "Indented list starts set the relative quote column",
+      "markdown": "  - outer\n    > ## Title",
+      "headings": [0, 2],
+      "marker": ["  - ", "> ", "## "]
+    },
+    {
+      "name": "Escaped container and code markers remain literal",
+      "markdown": "\\> not quote\n\n\\- not list\n\n> \\`literal\\`",
+      "headings": [0, 0, 0, 0, 0],
+      "marker": ["> "]
+    },
+    {
+      "name": "A new ordered list ends lazy quoted code",
+      "markdown": "> `one\n2. end`",
+      "headings": [0, 0],
+      "marker": ["> ", "2. "]
+    },
+    {
+      "name": "Indented lazy quote text does not start code",
+      "markdown": "> one\n    **two**",
+      "headings": [0, 0],
+      "marker": ["> ", "**", "**"],
+      "bold": ["two"]
+    },
+    {
+      "name": "Thematic breaks outrank list prefixes inside an item",
+      "markdown": "- item\n  * * *",
+      "headings": [0, 0],
+      "marker": ["- ", "* * *"]
+    },
+    {
+      "name": "HTML inside a quoted list fence stays inert code",
+      "markdown": "> - ```\n>   <img src=https://example.invalid/a onerror=alert(1)>\n>   ```",
+      "headings": [0, 0, 0],
+      "marker": ["> - ", "```", "> ", "> ", "```"],
+      "code": ["<img src=https://example.invalid/a onerror=alert(1)>"]
+    },
+    {
+      "name": "An explicit empty quoted line remains inside its fence",
+      "markdown": "> ```\n>\n> ```",
+      "headings": [0, 0, 0],
+      "marker": ["> ", "```", ">", "> ", "```"],
+      "code": [""]
+    },
+    {
+      "name": "Deeply quoted paragraphs accept indented lazy list-looking text",
+      "markdown": ">> paragraph\n    - **literal**",
+      "headings": [0, 0],
+      "marker": [">> ", "**", "**"],
+      "bold": ["literal"]
+    },
+    {
+      "name": "Four spaces before a quote cannot continue an open quoted fence",
+      "markdown": "> ```\n    > **literal**\n> ```\n> # Heading",
+      "headings": [0, 0, 0, 0],
+      "marker": ["> ", "```", "> ", "```", "> "],
+      "code": ["    > **literal**", "# Heading"]
+    }
+  ]
+}

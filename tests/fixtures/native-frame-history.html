@@ -1,0 +1,11 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Native iframe undo scope</title></head>
+<body>
+  <h1>Native iframe undo scope</h1>
+  <p>No editor library or scripts. Type in the child, then the parent field.
+    Focus the child again and press Ctrl/Cmd+Z. Observe which field changes.</p>
+  <label>Parent field <textarea id="note">parent</textarea></label>
+  <iframe title="Child native editor" srcdoc="<div id='source' contenteditable='true' role='textbox' aria-label='Child field'>child</div>"></iframe>
+</body>
+</html>

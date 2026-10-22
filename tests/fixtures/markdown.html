@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <link rel="stylesheet" href="../../dist/lightmetal.css">
+  <link rel="stylesheet" href="../../dist/skins/frost.css">
+  <link rel="stylesheet" href="../../dist/maiden.css">
+</head>
+<body>
+  <div id="editor" class="lightmetal"></div>
+  <script src="../../dist/maiden.js"></script>
+  <script>
+    window.__markdownChanges = [];
+    window.__initMarkdown = maiden.init;
+    window.__markdownEditor = maiden.init({
+      element: document.getElementById("editor"),
+      onChange: value => __markdownChanges.push(value)
+    });
+  </script>
+</body>
+</html>

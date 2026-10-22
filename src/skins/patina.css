@@ -1,0 +1,67 @@
+/* Crisp, blue-accented toolbar chrome. Original ligHTMetaL CSS.
+ * Load after lightmetal.css. Add lightmetal-patina to the editor host.
+ */
+.lightmetal.lightmetal-patina {
+  --lightmetal-bg: #ffffff;
+  --lightmetal-bg-toolbar: #f6f7f9;
+  --lightmetal-border: #c7cdd4;
+  --lightmetal-color: #243447;
+  --lightmetal-color-dim: #536172;
+  --lightmetal-hover: #e4ebf2;
+  --lightmetal-accent: #1465b8;
+  --lightmetal-accent-soft: #e2effc;
+  --lightmetal-error-fg: #b42318;
+  --lightmetal-error-bg: #fdecea;
+  color-scheme: light;
+  font-family: system-ui, sans-serif;
+  border-radius: 5px;
+}
+
+.lightmetal.lightmetal-patina.lightmetal-dark {
+  --lightmetal-bg: #202d3a;
+  --lightmetal-bg-toolbar: #273746;
+  --lightmetal-border: #5d6c7b;
+  --lightmetal-color: #f0f4f8;
+  --lightmetal-color-dim: #c0cad4;
+  --lightmetal-hover: #374a5d;
+  --lightmetal-accent: #a3cfff;
+  --lightmetal-accent-soft: #334f6c;
+  --lightmetal-error-fg: #ffb4ad;
+  --lightmetal-error-bg: #532924;
+  color-scheme: dark;
+}
+
+@media (prefers-color-scheme: dark) {
+  .lightmetal.lightmetal-patina:not(.lightmetal-light) {
+    --lightmetal-bg: #202d3a;
+    --lightmetal-bg-toolbar: #273746;
+    --lightmetal-border: #5d6c7b;
+    --lightmetal-color: #f0f4f8;
+    --lightmetal-color-dim: #c0cad4;
+    --lightmetal-hover: #374a5d;
+    --lightmetal-accent: #a3cfff;
+    --lightmetal-accent-soft: #334f6c;
+    --lightmetal-error-fg: #ffb4ad;
+    --lightmetal-error-bg: #532924;
+    color-scheme: dark;
+  }
+}
+
+.lightmetal-patina .lightmetal-actionbar {
+  gap: 2px;
+  padding: 4px;
+}
+
+.lightmetal-patina .lightmetal-button {
+  border-radius: 3px;
+}
+
+.lightmetal-patina .lightmetal-table-button,
+.lightmetal-patina .lightmetal-table-dropdown {
+  border-radius: 4px;
+}
+
+.lightmetal-patina .lightmetal-content,
+.lightmetal-patina .lightmetal-sources {
+  padding: 16px;
+}

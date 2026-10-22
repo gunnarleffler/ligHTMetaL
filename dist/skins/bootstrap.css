@@ -1,0 +1,68 @@
+/* Bootstrap-inspired form styling. Original ligHTMetaL CSS, not a Bootstrap dependency.
+ * Load after lightmetal.css. Add lightmetal-bootstrap to the editor host.
+ */
+.lightmetal.lightmetal-bootstrap {
+  --lightmetal-bg: #ffffff;
+  --lightmetal-bg-toolbar: #f8f9fa;
+  --lightmetal-border: #ced4da;
+  --lightmetal-color: #212529;
+  --lightmetal-color-dim: #495057;
+  --lightmetal-hover: #e9ecef;
+  --lightmetal-accent: #0759c7;
+  --lightmetal-accent-soft: #e7f0ff;
+  --lightmetal-error-fg: #b42318;
+  --lightmetal-error-bg: #fdecea;
+  color-scheme: light;
+  font-family: system-ui, sans-serif;
+  border-radius: 6px;
+}
+
+.lightmetal.lightmetal-bootstrap.lightmetal-dark {
+  --lightmetal-bg: #212529;
+  --lightmetal-bg-toolbar: #2b3035;
+  --lightmetal-border: #59636d;
+  --lightmetal-color: #f1f3f5;
+  --lightmetal-color-dim: #c2c9d0;
+  --lightmetal-hover: #3c454e;
+  --lightmetal-accent: #a6c8ff;
+  --lightmetal-accent-soft: #354860;
+  --lightmetal-error-fg: #ffb4ad;
+  --lightmetal-error-bg: #532924;
+  color-scheme: dark;
+}
+
+@media (prefers-color-scheme: dark) {
+  .lightmetal.lightmetal-bootstrap:not(.lightmetal-light) {
+    --lightmetal-bg: #212529;
+    --lightmetal-bg-toolbar: #2b3035;
+    --lightmetal-border: #59636d;
+    --lightmetal-color: #f1f3f5;
+    --lightmetal-color-dim: #c2c9d0;
+    --lightmetal-hover: #3c454e;
+    --lightmetal-accent: #a6c8ff;
+    --lightmetal-accent-soft: #354860;
+    --lightmetal-error-fg: #ffb4ad;
+    --lightmetal-error-bg: #532924;
+    color-scheme: dark;
+  }
+}
+
+.lightmetal.lightmetal-bootstrap:focus-within {
+  border-color: var(--lightmetal-accent);
+  box-shadow: 0 0 0 3px var(--lightmetal-accent-soft);
+}
+
+.lightmetal-bootstrap .lightmetal-actionbar {
+  gap: 3px;
+}
+
+.lightmetal-bootstrap .lightmetal-button {
+  width: 36px;
+  height: 32px;
+  border-radius: 4px;
+}
+
+.lightmetal-bootstrap .lightmetal-table-button,
+.lightmetal-bootstrap .lightmetal-table-dropdown {
+  border-radius: 4px;
+}

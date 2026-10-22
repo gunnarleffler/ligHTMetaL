@@ -1,0 +1,13 @@
+*.pyc
+.*swp*
+.venv
+node_modules/
+package-lock.json
+__pycache__
+.ruff_cache/
+
+# Local secrets
+.env
+
+# Local npm package archives
+/*.tgz

@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Markdown editing-document experiment</title>
+  <link rel="icon" href="../../examples/images/tiny.png">
+  <link rel="stylesheet" href="../../dist/lightmetal.css">
+  <link rel="stylesheet" href="../../dist/skins/bootstrap.css">
+  <link rel="stylesheet" href="../../dist/skins/material-classic.css">
+  <link rel="stylesheet" href="../../dist/skins/material-outline.css">
+  <link rel="stylesheet" href="../../dist/skins/frost.css">
+  <link rel="stylesheet" href="../../dist/skins/patina.css">
+  <link rel="stylesheet" href="../../dist/skins/sterling.css">
+  <link rel="stylesheet" href="../../dist/maiden.css">
+  <link rel="stylesheet" href="markdown-isolation.css">
+  <link rel="stylesheet" href="../../examples/markdown-surface.css">
+  <script id="markdown-library" src="../../dist/maiden.js" defer></script>
+  <script src="../../examples/markdown-surface.js" defer></script>
+  <script src="markdown-isolation.js" defer></script>
+</head>
+<body>
+  <h1>Markdown editing-document experiment</h1>
+  <p>Test fixture, not a production integration. Isolated mode puts the whole
+    editor, including its toolbar, in a same-origin <code>srcdoc</code> iframe.
+    Surface mode keeps the toolbar and mount in the parent page.
+    Add <code>plaintext=1</code> to the URL to probe native plaintext-only editing.</p>
+  <div class="controls">
+    <label>Editing document <select id="mode"><option value="inline">Shared</option><option value="isolated">Whole editor isolated</option><option value="surface">Writing surface isolated</option></select></label>
+    <label>Host callback <select id="callback"><option value="text">Persistent Text node</option><option value="remove">Replace unrelated DOM children</option><option value="textarea">Assign textarea.value</option></select></label>
+    <label>Skin <select id="skin"><option value="">Default</option><option>bootstrap</option><option>material-classic</option><option>material-outline</option><option>frost</option><option>patina</option><option>sterling</option></select></label>
+    <label>Palette <select id="palette"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select></label>
+  </div>
+  <p id="status" role="status">Loading editors…</p>
+  <button id="before" type="button">Before editors (Tab test)</button>
+  <div class="grid">
+    <section><h2>Editor A</h2><div id="host-a" class="experiment-editor"></div></section>
+    <section><h2>Editor B</h2><div id="host-b" class="experiment-editor"></div></section>
+  </div>
+  <button id="after" type="button">After editors (Tab test)</button>
+  <h2>Unrelated application fields</h2>
+  <div id="outside" contenteditable="true" role="textbox" aria-label="Application note">outside</div>
+  <label>Callback textarea <textarea id="sink" readonly></textarea></label>
+  <div id="mutation-target"><span>Unrelated child node</span></div>
+  <pre id="raw" aria-label="Current Markdown"></pre>
+</body>
+</html>

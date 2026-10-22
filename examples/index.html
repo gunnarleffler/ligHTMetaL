@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ligHTMetaL</title>
+  <link rel="stylesheet" href="../dist/lightmetal.css">
+  <link rel="stylesheet" href="../dist/maiden.css">
+  <link rel="stylesheet" href="../examples/showcase.css">
+</head>
+<body>
+<main class="page">
+  <header>
+    <div class="page-head">
+      <h1>lig<span class="cap">H</span><span class="cap">T</span><span class="cap">M</span>eta<span class="cap">L</span></h1>
+      <button id="theme-toggle" class="tool" type="button">Theme: auto</button>
+    </div>
+    <img class="logo" src="../ligHTMetaL.png" alt="ligHTMetaL logo" width="640">
+    <p class="pitch"><strong>Two editors. One parser. Your content.</strong>
+      Write rich HTML, edit Markdown without hiding its source, or turn Markdown into HTML.
+      Three independent JavaScript libraries. Zero runtime dependencies.
+      No accounts, tracking, or cloud required.</p>
+  </header>
+  <div class="tabs" role="tablist" aria-label="Libraries">
+    <button class="tab" role="tab" id="tab-html" aria-controls="panel-html" aria-selected="true" type="button">HTML Editor</button>
+    <button class="tab" role="tab" id="tab-markdown" aria-controls="panel-markdown" aria-selected="false" tabindex="-1" type="button">Markdown Editor</button>
+    <button class="tab" role="tab" id="tab-parser" aria-controls="panel-parser" aria-selected="false" tabindex="-1" type="button">Markdown Parser</button>
+  </div>
+  <section role="tabpanel" id="panel-html" aria-labelledby="tab-html">
+    <h2>ligHTMetaL — the HTML editor</h2>
+    <p>Rich-text editing with images, tables, HTML source, and the browser's native undo. A small toolbar, ready for your application.</p>
+    <div class="actions"><a href="html.html">Details &amp; quickstart →</a><a href="skins.html">Explore HTML editor skins</a></div>
+    <div id="html-editor" class="lightmetal"></div>
+    <h3>HTML output</h3><pre id="html-output" class="output" tabindex="0" aria-label="HTML editor output"></pre>
+  </section>
+  <section role="tabpanel" id="panel-markdown" aria-labelledby="tab-markdown" hidden>
+    <h2>ligHTMetaL::MaiDEn — the lightMarkDown Editor</h2>
+    <p>Styled source that keeps your Markdown visible. Format text, edit tables, and switch between source, preview, and side-by-side views.</p>
+    <div class="actions"><a href="markdown.html">Details &amp; quickstart →</a><a href="markdown-skins.html">Explore Markdown editor skins</a></div>
+    <div id="made-editor" class="lightmetal"></div>
+    <h3>Markdown output</h3><pre id="markdown-output" class="output" tabindex="0" aria-label="Markdown editor output"></pre>
+  </section>
+  <section role="tabpanel" id="panel-parser" aria-labelledby="tab-parser" hidden>
+    <h2>ligHTMetaL::MeltDown — the Markdown parser</h2>
+    <p>Markdown in. HTML out. A standalone parser for browsers and Node.js, with raw HTML escaped by default and an optional code-highlighting hook.</p>
+    <div class="actions"><a href="meltdown.html">Details &amp; quickstart →</a></div>
+    <label for="parser-input">Try some Markdown</label>
+    <textarea id="parser-input" spellcheck="false"># Markdown in. HTML out.
+
+A **small parser** with no dependencies.
+
+- Headings and lists
+- Tables and code
+- Your own syntax highlighter</textarea>
+    <h3>HTML output</h3><pre id="parser-output" class="output" tabindex="0" aria-label="Parser HTML output"></pre>
+    <h3>Rendered result</h3><iframe id="parser-preview" title="Sandboxed parser preview" sandbox="" style="width:100%;height:220px;border:1px solid;border-radius:8px;box-sizing:border-box;background:white"></iframe>
+    <p>A focused Markdown feature set for everyday writing. Use a maintained HTML sanitizer when rendering untrusted content. This demo keeps links and external images inactive.</p>
+  </section>
+  <p class="notice">Everything here runs locally in your browser. Nothing is saved or uploaded automatically.
+    Image URLs you insert in the HTML editor can still load remote resources.</p>
+</main>
+<script src="../dist/lightmetal.js"></script>
+<script src="../dist/MeltDown.js"></script>
+<script src="../dist/maiden.js"></script>
+<script src="../examples/showcase.js"></script>
+</body>
+</html>

@@ -1,0 +1,297 @@
+{
+  "standard": "CommonMark 0.31.2",
+  "description": "Original styled-source cases for the pinned rules, not the upstream conformance suite.",
+  "cases": [
+    {
+      "name": "ATX closing markers and empty content",
+      "markdown": "## Title ###  \n# ##\n  ### *Word* ##\n####### seven\n#joined",
+      "headings": [2, 1, 3, 0, 0],
+      "marker": ["## ", " ###  ", "# ", "##", "  ### ", "*", "*", " ##"],
+      "italic": ["Word"]
+    },
+    {
+      "name": "Closing hashes keep all separating spaces and tabs",
+      "markdown": "## Spaced \t  ###\n## words remain#",
+      "headings": [2, 2],
+      "marker": ["## ", " \t  ###", "## "]
+    },
+    {
+      "name": "Attached and escaped hashes are content",
+      "markdown": "## Title###\n## Title \\###\n## *Word* #\\#",
+      "headings": [2, 2, 2],
+      "marker": ["## ", "## ", "## ", "*", "*"],
+      "italic": ["Word"]
+    },
+    {
+      "name": "Code and closing hashes in ATX headings",
+      "markdown": "## `code ###`\n# `x` ###",
+      "headings": [2, 1],
+      "marker": ["## ", "`", "`", "# ", "`", "`", " ###"],
+      "code": ["code ###", "x"]
+    },
+    {
+      "name": "Thematic markers must agree and occur at least three times",
+      "markdown": "***\n_ _ _\n- - -  \n  *\t*\t*\n--\n**\n* _ *",
+      "headings": [0, 0, 0, 0, 0, 0, 0],
+      "marker": ["***", "_ _ _", "- - -  ", "  *\t*\t*", "* "]
+    },
+    {
+      "name": "Thematic indentation and mixed space-tab code indentation",
+      "markdown": "----\n____\n * * *\n  -\t-\t-\n----x\n_ _\n\n    ***\n \t### code",
+      "headings": [0, 0, 0, 0, 0, 0, 0, 0, 0],
+      "marker": ["----", "____", " * * *", "  -\t-\t-"],
+      "code": ["    ***", " \t### code"]
+    },
+    {
+      "name": "A shorter or different fence cannot close a block",
+      "markdown": "````lang\n## literal\n```\n**still literal**\n~~~~\n`````\n## after",
+      "headings": [0, 0, 0, 0, 0, 0, 2],
+      "marker": ["````lang", "`````", "## "],
+      "code": ["## literal", "```", "**still literal**", "~~~~"]
+    },
+    {
+      "name": "Tilde info may contain backticks and a longer closer is valid",
+      "markdown": "~~~ language `ok`\n# literal\n```\n~~~~ \t\n# after",
+      "headings": [0, 0, 0, 0, 1],
+      "marker": ["~~~ language `ok`", "~~~~ \t", "# "],
+      "code": ["# literal", "```"]
+    },
+    {
+      "name": "Backtick info cannot contain backticks",
+      "markdown": "``` bad`info\n## after\n```word```\n# last",
+      "headings": [0, 2, 0, 1],
+      "marker": ["## ", "```", "```", "# "],
+      "code": ["word"]
+    },
+    {
+      "name": "A nonbreaking space is not closing-fence whitespace",
+      "markdown": "```\n``` \u00a0\n# literal\n``` \t\n# after",
+      "headings": [0, 0, 0, 0, 1],
+      "marker": ["```", "``` \t", "# "],
+      "code": ["``` \u00a0", "# literal"]
+    },
+    {
+      "name": "Four spaces cannot indent a closing fence",
+      "markdown": "  ~~~ info\n    ~~~\n# literal\n   ~~~\n## after",
+      "headings": [0, 0, 0, 0, 2],
+      "marker": ["  ~~~ info", "   ~~~", "## "],
+      "code": ["    ~~~", "# literal"]
+    },
+    {
+      "name": "An unclosed fence stays literal through trailing empty lines",
+      "markdown": "```js\n**literal**\n# not heading\n",
+      "headings": [0, 0, 0, 0],
+      "marker": ["```js"],
+      "code": ["**literal**", "# not heading", ""]
+    },
+    {
+      "name": "Leading tabs reach four-column code indentation",
+      "markdown": "    **literal**\n\t## literal\n \t`still code`\n  \t~~~\n   \t# code",
+      "headings": [0, 0, 0, 0, 0],
+      "code": ["    **literal**", "\t## literal", " \t`still code`", "  \t~~~", "   \t# code"]
+    },
+    {
+      "name": "Inline code closes only on an equal-length run",
+      "markdown": "`a``b` then ``c`d``",
+      "headings": [0],
+      "marker": ["`", "`", "``", "``"],
+      "code": ["a``b", "c`d"]
+    },
+    {
+      "name": "An unmatched opening run is not reopened from its suffix",
+      "markdown": "``*word*` and **bold**",
+      "headings": [0],
+      "marker": ["*", "*", "**", "**"],
+      "italic": ["word"],
+      "bold": ["bold"]
+    },
+    {
+      "name": "A longer backtick run is not a partial closer",
+      "markdown": "``one``` **two**",
+      "headings": [0],
+      "marker": ["**", "**"],
+      "bold": ["two"]
+    },
+    {
+      "name": "Backslashes inside code do not escape its closing run",
+      "markdown": "`left\\` **bold**",
+      "headings": [0],
+      "marker": ["`", "`", "**", "**"],
+      "code": ["left\\"],
+      "bold": ["bold"]
+    },
+    {
+      "name": "Escaped openers stay text while code contents stay literal",
+      "markdown": "\\`*word*\\` and `**literal**`",
+      "headings": [0],
+      "marker": ["*", "*", "`", "`"],
+      "italic": ["word"],
+      "code": ["**literal**"]
+    },
+    {
+      "name": "Source HTML never creates elements or requests assets",
+      "markdown": "<img src=\"https://invalid.example/a\" onerror=\"alert(1)\">\n````\n<svg onload=alert(1)>\n````",
+      "headings": [0, 0, 0, 0]
+    },
+    {
+      "name": "Empty and trailing lines remain source",
+      "markdown": "\n\n",
+      "headings": [0, 0, 0]
+    },
+    {
+      "name": "Setext headings preserve Unicode and trailing lines",
+      "markdown": "Heading 🦊\n===\n\nTitle\n---\n",
+      "headings": [1, 0, 0, 2, 0, 0],
+      "marker": ["===", "---"]
+    },
+    {
+      "name": "Setext applies to the whole preceding paragraph",
+      "markdown": "First **bold**\nsecond *word*\n---\nnext",
+      "headings": [2, 2, 0, 0],
+      "marker": ["**", "**", "*", "*", "---"],
+      "bold": ["bold"],
+      "italic": ["word"]
+    },
+    {
+      "name": "Setext headings can follow each other without blank lines",
+      "markdown": "One\n=\nTwo\n-\nThree\n==\n",
+      "headings": [1, 0, 2, 0, 1, 0, 0],
+      "marker": ["=", "-", "=="]
+    },
+    {
+      "name": "Setext underlines cannot contain internal spaces or four-space indentation",
+      "markdown": "One\n= =\n---- x\n\\---\n    ---",
+      "headings": [0, 0, 0, 0, 0]
+    },
+    {
+      "name": "Setext indentation differs from standalone indented code",
+      "markdown": "   Title\n  ===\n\n    Literal\n---\n\nTitle\n    ===",
+      "headings": [1, 0, 0, 0, 0, 0, 0, 0],
+      "marker": ["  ===", "---"],
+      "code": ["    Literal"]
+    },
+    {
+      "name": "ATX and container boundaries prevent false Setext headings",
+      "markdown": "## ATX\n---\n\n> quote\ncontinued\n---\n\n- item\n---",
+      "headings": [2, 0, 0, 0, 0, 0, 0, 0, 0],
+      "marker": ["## ", "---", "> ", "---", "- ", "---"]
+    },
+    {
+      "name": "A blank line separates a paragraph from an underline",
+      "markdown": "Title\n\n---\n\n===",
+      "headings": [0, 0, 0, 0, 0],
+      "marker": ["---"]
+    },
+    {
+      "name": "Indentation cannot interrupt an open paragraph with code",
+      "markdown": "paragraph\n    **continued**\n \t*more*",
+      "headings": [0, 0, 0],
+      "marker": ["**", "**", "*", "*"],
+      "bold": ["continued"],
+      "italic": ["more"]
+    },
+    {
+      "name": "Unindented text ends code and starts a paragraph",
+      "markdown": "    **code**\nplain\n\t*continued*\n\n\t**code again**",
+      "headings": [0, 0, 0, 0, 0],
+      "marker": ["*", "*"],
+      "code": ["    **code**", "\t**code again**"],
+      "italic": ["continued"]
+    },
+    {
+      "name": "A non-one ordered marker cannot interrupt a paragraph",
+      "markdown": "paragraph\n2. still paragraph\n---",
+      "headings": [2, 2, 0],
+      "marker": ["---"]
+    },
+    {
+      "name": "An ordered list starting at one can interrupt a paragraph",
+      "markdown": "paragraph\n1. item\n---",
+      "headings": [0, 0, 0],
+      "marker": ["1. ", "---"]
+    },
+    {
+      "name": "Leading zeros do not change an ordered list start value",
+      "markdown": "paragraph\n001. item\n---",
+      "headings": [0, 0, 0],
+      "marker": ["001. ", "---"]
+    },
+    {
+      "name": "An ordered marker has at most nine digits",
+      "markdown": "1234567890. text\n---",
+      "headings": [2, 0],
+      "marker": ["---"]
+    },
+    {
+      "name": "A nonbreaking space is list content, not an empty item",
+      "markdown": "paragraph\n- \u00a0\n---",
+      "headings": [0, 0, 0],
+      "marker": ["- ", "---"]
+    },
+    {
+      "name": "An empty list item cannot interrupt a paragraph",
+      "markdown": "paragraph\n* \n---\n\n+ \n---",
+      "headings": [2, 2, 0, 0, 0, 0],
+      "marker": ["---", "+ ", "---"]
+    },
+    {
+      "name": "Escaped Setext characters remain paragraph text",
+      "markdown": "Title\n\\===\n\nOther\n\\---",
+      "headings": [0, 0, 0, 0, 0]
+    },
+    {
+      "name": "Code spans cross soft line breaks without styling their contents",
+      "markdown": "`first\n**literal**\nlast`",
+      "headings": [0, 0, 0],
+      "marker": ["`", "`"],
+      "code": ["first", "**literal**", "last"]
+    },
+    {
+      "name": "Multiline code keeps source spaces instead of renderer normalization",
+      "markdown": "` \n `",
+      "headings": [0, 0],
+      "marker": ["`", "`"],
+      "code": [" ", " "]
+    },
+    {
+      "name": "Multiline code still requires equal delimiter runs",
+      "markdown": "``first`\nlast``",
+      "headings": [0, 0],
+      "marker": ["``", "``"],
+      "code": ["first`", "last"]
+    },
+    {
+      "name": "Code spans cannot cross a blank paragraph boundary",
+      "markdown": "`first\n\nlast`",
+      "headings": [0, 0, 0]
+    },
+    {
+      "name": "Code spans cannot cross an ATX block boundary",
+      "markdown": "`first\n## Heading\nlast`",
+      "headings": [0, 2, 0],
+      "marker": ["## "]
+    },
+    {
+      "name": "Code spans cannot cross a fenced block boundary",
+      "markdown": "`first\n```\n**literal**\n```\nlast`",
+      "headings": [0, 0, 0, 0, 0],
+      "marker": ["```", "```"],
+      "code": ["**literal**"]
+    },
+    {
+      "name": "Basic emphasis crosses soft paragraph line breaks",
+      "markdown": "**first\nlast** and *more\nwords*",
+      "headings": [0, 0, 0],
+      "marker": ["**", "**", "*", "*"],
+      "bold": ["first", "last"],
+      "italic": ["more", "words"]
+    },
+    {
+      "name": "Fenced and indented code cannot become Setext headings",
+      "markdown": "```\nTitle\n===\n```\n\n    Literal\n    ---",
+      "headings": [0, 0, 0, 0, 0, 0, 0],
+      "marker": ["```", "```"],
+      "code": ["Title", "===", "    Literal", "    ---"]
+    }
+  ]
+}

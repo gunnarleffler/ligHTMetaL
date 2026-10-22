@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>ligHTMetaL — HTML editor</title>
+    <link rel="stylesheet" href="../dist/lightmetal.css">
+    <style>
+      :root {
+        --page-bg: #fbfbfd;
+        --page-fg: #24292f;
+        --page-dim: #6a737d;
+        --page-border: #e3e6eb;
+        --page-surface: #ffffff;
+        --page-hover: #f1f3f7;
+        --wordmark: #556ee7;
+      }
+      /* The page follows the editors' theme colors: light by default, dark
+         in auto mode when the system is dark. Pin it with .page-dark or
+         .page-light on the <html> element; the pins beat the system. */
+      @media (prefers-color-scheme: dark) {
+        :root:not(.page-light) {
+          --page-bg: #16181c;
+          --page-fg: #e6e9ee;
+          --page-dim: #9aa4b2;
+          --page-border: #2c313a;
+          --page-surface: #1e2126;
+          --page-hover: #262b33;
+          --wordmark: #8fa0ff;
+        }
+      }
+      :root.page-dark {
+        --page-bg: #16181c;
+        --page-fg: #e6e9ee;
+        --page-dim: #9aa4b2;
+        --page-border: #2c313a;
+        --page-surface: #1e2126;
+        --page-hover: #262b33;
+        --wordmark: #8fa0ff;
+      }
+      body {
+        margin: 0;
+        background: var(--page-bg);
+        color: var(--page-fg);
+        font-family: system-ui, sans-serif;
+        transition: background-color 150ms ease, color 150ms ease;
+      }
+      .page {
+        max-width: 760px;
+        margin: 0 auto;
+        padding: 28px 24px 48px;
+      }
+
+      /* Wordmark: lowercase in the text color, caps (H, T, M, L) in the
+         accent. The caps spell HTML. */
+      h1 {
+        margin: 0;
+        font-size: 40px;
+        font-weight: 800;
+        letter-spacing: -1px;
+      }
+      h1 .cap { color: var(--wordmark); }
+      .tagline {
+        margin: 6px 0 14px;
+        color: var(--page-dim);
+        font-size: 14px;
+      }
+      .hint a { color: var(--page-fg); }
+      img.logo {
+        display: block;
+        width: 100%;
+        height: auto;
+        margin: 0 0 24px;
+      }
+      .page-head {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 16px;
+      }
+
+      /* Demo tabs. */
+      .tabs {
+        display: flex;
+        gap: 4px;
+        border-bottom: 1px solid var(--page-border);
+        margin-bottom: 18px;
+      }
+      .tab {
+        font: inherit;
+        font-size: 14px;
+        color: var(--page-dim);
+        background: none;
+        border: 0;
+        border-bottom: 2px solid transparent;
+        padding: 8px 12px;
+        margin-bottom: -1px;
+        cursor: pointer;
+      }
+      .tab:hover { color: var(--page-fg); }
+      .tab[aria-selected="true"] {
+        color: var(--page-fg);
+        font-weight: 600;
+        border-bottom-color: var(--wordmark);
+      }
+      .tab:focus-visible {
+        outline: 2px solid var(--wordmark);
+        outline-offset: 1px;
+        border-radius: 4px;
+      }
+      .tabpanel[hidden] { display: none; }
+      .tabpanel { animation: fade 120ms ease-out; }
+      @keyframes fade {
+        from { opacity: 0; }
+        to { opacity: 1; }
+      }
+
+      .hint { color: var(--page-dim); font-size: 14px; }
+      h3 { margin: 18px 0 8px; font-size: 15px; }
+      #text-output { margin-bottom: 4px; }
+      #quickstart { white-space: pre-wrap; overflow-wrap: anywhere; }
+      #html-output {
+        margin: 0;
+        white-space: pre-wrap;
+        overflow-x: auto;
+        border: 1px solid var(--page-border);
+        border-radius: 8px;
+        background: var(--page-surface);
+        padding: 10px;
+        font-size: 13px;
+      }
+      button.tool {
+        font: inherit;
+        font-size: 13px;
+        padding: 6px 12px;
+        border: 1px solid var(--page-border);
+        border-radius: 6px;
+        background: var(--page-surface);
+        color: var(--page-fg);
+        cursor: pointer;
+      }
+      button.tool:hover { background: var(--page-hover); }
+      code {
+        background: var(--page-hover);
+        border-radius: 4px;
+        padding: 1px 5px;
+        font-size: 13px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="page">
+      <div class="page-head">
+        <h1>lig<span class="cap">H</span><span class="cap">T</span><span class="cap">M</span>eta<span class="cap">L</span></h1>
+        <button id="theme-toggle" class="tool" type="button">Theme: auto</button>
+      </div>
+      <p class="tagline">Lightweight HTML editing with images, tables and source mode. Zero runtime dependencies.</p>
+      <img class="logo" src="../ligHTMetaL.png" alt="ligHTMetaL">
+      <p class="hint"><a href="index.html">All three libraries</a> · <a href="skins.html">HTML editor skins</a> · <a href="markdown.html">Markdown editor</a> · <a href="meltdown.html">Markdown parser</a></p>
+      <p>Format text, insert images, edit tables, or work directly in HTML source. The browser owns selection and undo. Your application owns persistence and uploads.</p>
+
+      <div class="tabs" role="tablist" aria-label="Examples">
+        <button class="tab" type="button" role="tab" id="tab-basic" aria-selected="true"
+          aria-controls="panel-basic">Default</button>
+        <button class="tab" type="button" role="tab" id="tab-custom" aria-selected="false"
+          aria-controls="panel-custom" tabindex="-1">Custom upload</button>
+        <button class="tab" type="button" role="tab" id="tab-raw" aria-selected="false"
+          aria-controls="panel-raw" tabindex="-1">Raw pass-through</button>
+      </div>
+
+      <div class="tabpanel" role="tabpanel" id="panel-basic" aria-labelledby="tab-basic">
+        <p class="hint">
+          Type to edit. Select text and use the toolbar. Paste, drop, or
+          insert images with the image button.
+        </p>
+        <div id="editor" class="lightmetal"></div>
+        <h3>Text output</h3>
+        <div id="text-output"></div>
+        <h3>HTML output</h3>
+        <pre id="html-output"></pre>
+      </div>
+
+      <div class="tabpanel" role="tabpanel" id="panel-custom" aria-labelledby="tab-custom" hidden>
+        <p class="hint">
+          A second editor with a trimmed toolbar. Its image handler uploads
+          files through a custom hook. This demo returns a base64 data URI;
+          a real upload would return the server's image URL.
+        </p>
+        <div id="editor-custom" class="lightmetal"></div>
+      </div>
+
+      <div class="tabpanel" role="tabpanel" id="panel-raw" aria-labelledby="tab-raw" hidden>
+        <p class="hint">
+          This editor runs with <code>rawMode: true</code>: pasted or
+          imported HTML skips sanitization. Use it only when you sanitize
+          the HTML yourself — for example, right after a Source edit or
+          from content you already control.
+        </p>
+        <div id="editor-raw" class="lightmetal"></div>
+      </div>
+      <h2>Quickstart</h2>
+      <p>Copy the prebuilt CSS and JavaScript beside your page. No build step is required.</p>
+      <pre id="quickstart">&lt;link rel="stylesheet" href="lightmetal.css"&gt;
+&lt;div id="editor" class="lightmetal"&gt;&lt;/div&gt;
+&lt;script src="lightmetal.js"&gt;&lt;/script&gt;
+&lt;script&gt;
+  const editor = lightmetal.init({
+    element: document.getElementById('editor'),
+    onChange: html =&gt; console.log(html)
+  });
+  editor.setHTML('&lt;p&gt;Hello, ligHTMetaL!&lt;/p&gt;');
+&lt;/script&gt;</pre>
+      <p>Read content with <code>editor.getHTML()</code> and call <code>editor.destroy()</code> when removing the editor. Choose toolbar controls with the <code>actions</code> option.</p>
+      <p>Use a maintained HTML sanitizer before rendering or publishing untrusted content. The editor filters HTML imports by default; Source edits and raw mode give your application direct control over HTML.</p>
+    </div>
+
+    <script src="../dist/lightmetal.js"></script>
+    <script>
+      window.editor = window.lightmetal.init({
+        element: document.getElementById("editor"),
+        defaultParagraphSeparator: "p",
+        onChange: (html) => {
+          window.lastChange = html;
+          window.changeCount = (window.changeCount || 0) + 1;
+          document.getElementById("text-output").innerHTML = html;
+          document.getElementById("html-output").textContent = html;
+        }
+      });
+
+      window.customEditor = window.lightmetal.init({
+        element: document.getElementById("editor-custom"),
+        actions: ["bold", "italic", "link", "image", "source"],
+        images: {
+          allowBase64: true, // The demo hook returns a data URI.
+          // Fake upload: in a real app this would POST the file to a server.
+          onInsert: async (file) => {
+            return new Promise((resolve, reject) => {
+              const reader = new FileReader();
+              reader.onload = () => resolve(reader.result);
+              reader.onerror = () => reject(new Error("upload failed"));
+              reader.readAsDataURL(file);
+            });
+          }
+        }
+      });
+
+      window.rawEditor = window.lightmetal.init({
+        element: document.getElementById("editor-raw"),
+        rawMode: true
+      });
+
+      // Simple ARIA tabs: click to switch, arrows to move, Home and to end.
+      const tabs = [...document.querySelectorAll(".tabs .tab")];
+      const panels = tabs.map((tab) =>
+        document.getElementById(tab.getAttribute("aria-controls"))
+      );
+      function activate(index, moveFocus = true) {
+        tabs.forEach((tab, i) => {
+          const selected = i === index;
+          tab.setAttribute("aria-selected", String(selected));
+          tab.tabIndex = selected ? 0 : -1;
+          panels[i].hidden = !selected;
+        });
+        if (moveFocus) tabs[index].focus();
+      }
+      tabs.forEach((tab, i) => {
+        tab.addEventListener("click", () => activate(i, false));
+        tab.addEventListener("keydown", (event) => {
+          let next = null;
+          if (event.key === "ArrowRight") next = (i + 1) % tabs.length;
+          else if (event.key === "ArrowLeft") next = (i - 1 + tabs.length) % tabs.length;
+          else if (event.key === "Home") next = 0;
+          else if (event.key === "End") next = tabs.length - 1;
+          if (next !== null) {
+            event.preventDefault();
+            activate(next);
+          }
+        });
+      });
+
+      // Cycle: auto (follows the system) -> dark -> light -> auto.
+      const themeButton = document.getElementById("theme-toggle");
+      const themeStates = ["auto", "dark", "light"];
+      let themeIndex = 0;
+      themeButton.addEventListener("click", () => {
+        themeIndex = (themeIndex + 1) % themeStates.length;
+        const state = themeStates[themeIndex];
+        const root = document.documentElement;
+        root.classList.remove("page-dark", "page-light");
+        document.querySelectorAll(".lightmetal").forEach((el) => {
+          el.classList.remove("lightmetal-dark", "lightmetal-light");
+          if (state !== "auto") el.classList.add("lightmetal-" + state);
+        });
+        if (state !== "auto") root.classList.add("page-" + state);
+        themeButton.textContent = "Theme: " + state;
+      });
+    </script>
+  </body>
+</html>
