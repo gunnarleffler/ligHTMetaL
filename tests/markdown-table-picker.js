@@ -1,15 +1,22 @@
 /* A size picker outside source, with a saved and invalidatable insertion point. */
 const assert = require("node:assert/strict");
-const template = (rows, columns) => ["| " + Array.from({ length: columns }, (_,i) => "Column " + (i + 1)).join(" | ") + " |",
-  "| " + Array(columns).fill("---").join(" | ") + " |", ...Array(rows - 1).fill("|" + "  |".repeat(columns))].join("\n");
+const template = (rows, columns) => {
+  const headers = Array.from({ length: columns }, (_, i) => "Column " + (i + 1));
+  return ["| " + headers.join(" | ") + " |", "| " + headers.map(header => "-".repeat(header.length)).join(" | ") + " |",
+    ...Array(rows - 1).fill("| " + headers.map(header => " ".repeat(header.length)).join(" | ") + " |")].join("\n");
+};
 async function tablePickerChecks(browser, base, name) {
   const page = await browser.newPage({ viewport: { width: 1200, height: 900 } });
   const errors = [], requests = []; let monitor = false;
   page.on("pageerror", error => errors.push(error.message)); page.on("request", request => { if (monitor) requests.push(request.url()); });
   try {
     await page.goto(base + "/tests/fixtures/markdown.html"); await page.waitForFunction(() => window.__markdownEditor);
+    await page.evaluate(() => {
+      __markdownEditor.destroy();
+      window.__markdownEditor = __initMarkdown({ element: document.getElementById("editor"), actions: ["table-insert"], onChange: value => __markdownChanges.push(value) });
+    });
     await page.evaluate(() => { const outside = document.createElement("button"); outside.id = "picker-outside"; outside.textContent = "Outside"; document.body.append(outside); });
-    const bar = page.getByRole("group", { name: "Markdown formatting" }), button = bar.getByRole("button", { name: "Table", exact: true });
+    const bar = page.getByRole("group", { name: "Markdown formatting" }), button = bar.getByRole("button", { name: "Insert Table…", exact: true });
     const popup = page.getByRole("dialog", { name: "Insert table", exact: true });
     const get = () => page.evaluate(() => __markdownEditor.getMarkdown()), count = () => page.evaluate(() => __markdownChanges.length - __pickerBefore);
     const prepare = (text = "", line = 0, column = 0) => page.evaluate(({ text, line, column }) => {
@@ -85,14 +92,14 @@ async function tablePickerChecks(browser, base, name) {
     assert.equal(await page.evaluate(() => __pickerDead.querySelector('[data-row="1"]').dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true, cancelable: true }))), true);
     await page.evaluate(() => {
       window.__nativePopover = HTMLElement.prototype.showPopover; HTMLElement.prototype.showPopover = undefined;
-      window.__markdownEditor = __initMarkdown({ element: document.getElementById("editor"), onChange: value => __markdownChanges.push(value) });
+      window.__markdownEditor = __initMarkdown({ element: document.getElementById("editor"), actions: ["table-insert"], onChange: value => __markdownChanges.push(value) });
     });
     await prepare(); await button.click(); assert.equal(await popup.isVisible(), true);
     assert.equal(await popup.evaluate(node => node.hasAttribute("popover")), false);
     await manual(1,2); assert.equal(await get(), template(1,2)); assert.equal(await count(), 1);
     await page.evaluate(() => {
       HTMLElement.prototype.showPopover = __nativePopover; __markdownEditor.destroy(); window.__confirmTrap = false; window.__pickerStates = 0;
-      window.__markdownEditor = __initMarkdown({ element: document.getElementById("editor"), actions: ["table", { name: "bold", state: api => {
+      window.__markdownEditor = __initMarkdown({ element: document.getElementById("editor"), actions: ["table-insert", { name: "bold", state: api => {
         __pickerStates++;
         if (__confirmTrap && document.activeElement === api.content && api.getMarkdown() === "") { window.__confirmTrap = false; api.setMarkdown("unexpected focus callback"); }
         return false;

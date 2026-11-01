@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>ligHTMetaL — HTML editor</title>
     <link rel="stylesheet" href="../dist/lightmetal.css">
+    <link rel="stylesheet" href="../dist/polish.css">
     <style>
       :root {
         --page-bg: #fbfbfd;
@@ -156,7 +157,7 @@
       </div>
       <p class="tagline">Lightweight HTML editing with images, tables and source mode. Zero runtime dependencies.</p>
       <img class="logo" src="../ligHTMetaL.png" alt="ligHTMetaL">
-      <p class="hint"><a href="index.html">All three libraries</a> · <a href="skins.html">HTML editor skins</a> · <a href="markdown.html">Markdown editor</a> · <a href="meltdown.html">Markdown parser</a></p>
+      <p class="hint"><a href="index.html">All four libraries</a> · <a href="skins.html">HTML editor skins</a> · <a href="markdown.html">Markdown editor</a> · <a href="meltdown.html">Markdown parser</a> · <a href="polish.html">Syntax highlighter</a></p>
       <p>Format text, insert images, edit tables, or work directly in HTML source. The browser owns selection and undo. Your application owns persistence and uploads.</p>
 
       <div class="tabs" role="tablist" aria-label="Examples">
@@ -177,7 +178,7 @@
         <h3>Text output</h3>
         <div id="text-output"></div>
         <h3>HTML output</h3>
-        <pre id="html-output"></pre>
+        <pre data-code-language="html" id="html-output"></pre>
       </div>
 
       <div class="tabpanel" role="tabpanel" id="panel-custom" aria-labelledby="tab-custom" hidden>
@@ -200,7 +201,7 @@
       </div>
       <h2>Quickstart</h2>
       <p>Copy the prebuilt CSS and JavaScript beside your page. No build step is required.</p>
-      <pre id="quickstart">&lt;link rel="stylesheet" href="lightmetal.css"&gt;
+      <pre data-code-language="html" id="quickstart">&lt;link rel="stylesheet" href="lightmetal.css"&gt;
 &lt;div id="editor" class="lightmetal"&gt;&lt;/div&gt;
 &lt;script src="lightmetal.js"&gt;&lt;/script&gt;
 &lt;script&gt;
@@ -215,6 +216,8 @@
     </div>
 
     <script src="../dist/lightmetal.js"></script>
+    <script src="../dist/polish.js"></script>
+    <script src="../examples/code-blocks.js"></script>
     <script>
       window.editor = window.lightmetal.init({
         element: document.getElementById("editor"),
@@ -223,7 +226,7 @@
           window.lastChange = html;
           window.changeCount = (window.changeCount || 0) + 1;
           document.getElementById("text-output").innerHTML = html;
-          document.getElementById("html-output").textContent = html;
+          exampleCode.write(document.getElementById('html-output'), html, 'html');
         }
       });
 
@@ -287,10 +290,7 @@
         const state = themeStates[themeIndex];
         const root = document.documentElement;
         root.classList.remove("page-dark", "page-light");
-        document.querySelectorAll(".lightmetal").forEach((el) => {
-          el.classList.remove("lightmetal-dark", "lightmetal-light");
-          if (state !== "auto") el.classList.add("lightmetal-" + state);
-        });
+        root.dataset.lightmetalTheme = state;
         if (state !== "auto") root.classList.add("page-" + state);
         themeButton.textContent = "Theme: " + state;
       });

@@ -13,7 +13,7 @@ const cases = [
   ['standalone custom tag starts a block', '<my-widget value="x">\n**literal**\n</my-widget>', '<my-widget value="x">\n**literal**\n</my-widget>'],
   ['standalone inline tags do not interrupt prose', 'before\n<span>\n**after**', '<p>before\n<span>\n<strong>after</strong></p>'],
   ['details block', '<details>\n<summary>More</summary>\n<p>Details</p>\n</details>', '<details>\n<summary>More</summary>\n<p>Details</p>\n</details>'],
-  ['script body remains literal', '<script>\nconst x = "**literal**";\n\n</script>\n# After', '<script>\nconst x = "**literal**";\n\n</script>\n<h1>After</h1>'],
+  ['script body remains literal', '<script>\nconst x = "**literal**";\n\n</script>\n# After', '<script>\nconst x = "**literal**";\n\n</script>\n<h1 id="after">After</h1>'],
   ['style body remains literal', '<style>\np { color: red; }\n</style>\ntext', '<style>\np { color: red; }\n</style>\n<p>text</p>'],
   ['pre body remains literal', '<pre>\n# literal\n\n</pre>\ntext', '<pre>\n# literal\n\n</pre>\n<p>text</p>'],
   ['textarea body remains literal', '<textarea>**literal**</textarea>\ntext', '<textarea>**literal**</textarea>\n<p>text</p>'],
@@ -121,12 +121,12 @@ test('autolinks do not activate in code, escapes, or Markdown link labels', () =
   assert.equal(parse('[<https://example.com>](./outer)', allow),
     '<p><a href="./outer">&lt;https://example.com&gt;</a></p>');
   assert.equal(parse('https://example.com +15551234567 user@example.com'),
-    '<p>https://example.com +15551234567 user@example.com</p>');
+    '<p><a href="https://example.com">https://example.com</a> +15551234567 user@example.com</p>');
 });
 
 test('autolinks work in headings, lists, quotes, and tables', () => {
   const link = '<a href="https://example.com">https://example.com</a>';
-  assert.equal(parse('# <https://example.com>'), `<h1>${link}</h1>`);
+  assert.equal(parse('# <https://example.com>'), `<h1 id="httpsexamplecom">${link}</h1>`);
   assert.equal(parse('- <https://example.com>'), `<ul><li>${link}</li></ul>`);
   assert.equal(parse('> <https://example.com>'), `<blockquote><p>${link}</p></blockquote>`);
   assert.equal(parse('| Link |\n| --- |\n| <https://example.com/a|b> |'),

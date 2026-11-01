@@ -2,49 +2,18 @@
  * Load after lightmetal.css. Add lightmetal-frost to the editor host.
  */
 .lightmetal.lightmetal-frost {
-  --lightmetal-bg: #ffffff;
-  --lightmetal-bg-toolbar: #ffffff;
-  --lightmetal-border: #d7e2e8;
-  --lightmetal-color: #263e4a;
-  --lightmetal-color-dim: #526a77;
-  --lightmetal-hover: #eff7fa;
-  --lightmetal-accent: #086785;
-  --lightmetal-accent-soft: #e1f3fa;
-  --lightmetal-error-fg: #b42318;
-  --lightmetal-error-bg: #fdecea;
-  color-scheme: light;
+  --lightmetal-bg: light-dark(#ffffff, #14242d);
+  --lightmetal-bg-toolbar: light-dark(#ffffff, #172b35);
+  --lightmetal-border: light-dark(#d7e2e8, #47606d);
+  --lightmetal-color: light-dark(#263e4a, #e9f3f8);
+  --lightmetal-color-dim: light-dark(#526a77, #b0c6d2);
+  --lightmetal-hover: light-dark(#eff7fa, #243f4d);
+  --lightmetal-accent: light-dark(#086785, #89d8ef);
+  --lightmetal-accent-soft: light-dark(#e1f3fa, #264d5a);
+  --lightmetal-error-fg: light-dark(#b42318, #ffb4ad);
+  --lightmetal-error-bg: light-dark(#fdecea, #532924);
   font-family: system-ui, sans-serif;
   border-radius: 14px;
-}
-
-.lightmetal.lightmetal-frost.lightmetal-dark {
-  --lightmetal-bg: #14242d;
-  --lightmetal-bg-toolbar: #172b35;
-  --lightmetal-border: #47606d;
-  --lightmetal-color: #e9f3f8;
-  --lightmetal-color-dim: #b0c6d2;
-  --lightmetal-hover: #243f4d;
-  --lightmetal-accent: #89d8ef;
-  --lightmetal-accent-soft: #264d5a;
-  --lightmetal-error-fg: #ffb4ad;
-  --lightmetal-error-bg: #532924;
-  color-scheme: dark;
-}
-
-@media (prefers-color-scheme: dark) {
-  .lightmetal.lightmetal-frost:not(.lightmetal-light) {
-    --lightmetal-bg: #14242d;
-    --lightmetal-bg-toolbar: #172b35;
-    --lightmetal-border: #47606d;
-    --lightmetal-color: #e9f3f8;
-    --lightmetal-color-dim: #b0c6d2;
-    --lightmetal-hover: #243f4d;
-    --lightmetal-accent: #89d8ef;
-    --lightmetal-accent-soft: #264d5a;
-    --lightmetal-error-fg: #ffb4ad;
-    --lightmetal-error-bg: #532924;
-    color-scheme: dark;
-  }
 }
 
 .lightmetal-frost .lightmetal-actionbar {

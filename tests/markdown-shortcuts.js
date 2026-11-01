@@ -190,41 +190,29 @@ async function shortcutChecks(browser, base, name) {
     });
     assert.ok(validation.failures.every(Boolean)); assert.equal(validation.preserved, true);
 
-    // The child core owns bindings, even when the application ports its toolbar.
-    for (const mode of ["whole", "surface"]) {
-      await page.goto(base + (mode === "whole" ? "/examples/markdown-iframe.html" : "/examples/markdown.html?mode=isolated"));
-      if (mode === "whole") {
-        await page.waitForFunction(() => !document.getElementById("read-markdown").disabled);
-        await page.frameLocator("#isolated-editor").locator(".lightmarkdown-input").evaluate(source => {
-          const win = source.ownerDocument.defaultView, host = source.closest(".lightmarkdown");
-          win.__markdownEditor.destroy();
-          win.__markdownEditor = win.maiden.init({ element: host, shortcuts: { codeblock: "Alt+Shift+c" } });
-          win.__markdownEditor.setMarkdown("metal");
-        });
-      } else {
-        await page.waitForFunction(() => window.__markdownEditor && __markdownMode === "isolated");
-        await page.evaluate(async () => {
-          __markdownEditor.destroy(); window.__markdownEditor = await __initMarkdownSurface({ element: document.getElementById("markdown-editor"), shortcuts: { codeblock: "Alt+Shift+c" } });
-          __markdownEditor.setMarkdown("metal"); document.getElementById("history-demo").open = true;
-        });
-      }
-      const input = page.frameLocator(mode === "whole" ? "#isolated-editor" : ".lightmarkdown-surface-frame").locator(".lightmarkdown-input");
-      const note = page.locator(mode === "whole" ? "#application-note" : "#history-note");
-      await note.fill("app note"); await note.press("End"); await page.keyboard.type("!");
+    // Bindings, toolbar, selection, and native history all belong to the frame.
+    {
+      await page.goto(base + "/examples/markdown-iframe.html");
+      await page.waitForFunction(() => !document.getElementById("read-markdown").disabled);
+      const view = page.frameLocator("#isolated-editor"), input = view.locator(".lightmarkdown-input");
+      await input.evaluate(source => {
+        const win = source.ownerDocument.defaultView, host = source.closest(".lightmarkdown");
+        win.__markdownEditor.destroy();
+        win.__markdownEditor = win.maiden.init({ element: host, shortcuts: { codeblock: "Alt+Shift+c" } });
+        win.__markdownEditor.setMarkdown("metal");
+      });
       await input.focus(); await page.keyboard.press("Alt+Shift+c");
-      const read = () => mode === "whole" ? input.evaluate(source => source.ownerDocument.defaultView.__markdownEditor.getMarkdown()) : page.evaluate(() => __markdownEditor.getMarkdown());
-      assert.equal(await read(), "```\nmetal\n```", mode + ": child shortcut");
-      await page.keyboard.press("Control+z"); assert.equal(await read(), "metal"); assert.equal(await note.inputValue(), "app note!");
-      const bar = mode === "whole" ? page.frameLocator("#isolated-editor").getByRole("group", { name: "Markdown formatting" }) : page.getByRole("group", { name: "Markdown formatting" });
+      const read = () => input.evaluate(source => source.ownerDocument.defaultView.__markdownEditor.getMarkdown());
+      assert.equal(await read(), "```\nmetal\n```", "whole-editor iframe shortcut");
+      await page.keyboard.press("Control+z"); assert.equal(await read(), "metal");
+      const bar = view.getByRole("group", { name: "Markdown formatting" });
       assert.equal(await bar.getByRole("button", { name: "Code Block", exact: true }).getAttribute("aria-keyshortcuts"), "Alt+Shift+c");
-      await note.focus(); await page.keyboard.press("Alt+Shift+c"); assert.equal(await read(), "metal");
       await input.focus(); await page.keyboard.press("Escape"); await page.keyboard.press("Shift+Tab");
       const last = bar.locator("button:enabled").last();
-      if (!await last.evaluate(node => node === node.ownerDocument.activeElement)) await page.keyboard.press("Shift+Tab");
       assert.equal(await last.evaluate(node => node === node.ownerDocument.activeElement), true);
     }
     assert.deepEqual(errors, []); assert.deepEqual(remote, []);
-    console.log(`${name}: configurable/default/keyboard-only shortcuts, hints, validation, guards, history, isolation and iframe ownership: ok`);
+    console.log(`${name}: configurable/default/keyboard-only shortcuts, hints, validation, guards, history and whole-editor iframe ownership: ok`);
   } finally { await page.close(); }
 }
 module.exports = { shortcutChecks };

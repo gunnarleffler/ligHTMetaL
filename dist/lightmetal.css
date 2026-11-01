@@ -2,25 +2,32 @@
  *
  * Every rule is scoped under .lightmetal. Theme via the --lightmetal-*
  * custom properties. Pin a theme on the element with .lightmetal-dark or
- * .lightmetal-light; without a pin, dark follows the system setting.
+ * .lightmetal-light; without a pin, follow data-lightmetal-theme or the system.
  *
  * Force dark:      <div class="lightmetal lightmetal-dark">
  * Force light:     <div class="lightmetal lightmetal-light">
  * Follow system:   <div class="lightmetal">
  */
 
+/* This small contract also ships in polish.css; neither stylesheet needs the other. */
+[data-lightmetal-theme="light"] { --lightmetal-color-scheme: light; color-scheme: light; }
+[data-lightmetal-theme="dark"] { --lightmetal-color-scheme: dark; color-scheme: dark; }
+[data-lightmetal-theme="auto"] { --lightmetal-color-scheme: light dark; color-scheme: light dark; }
+
 .lightmetal {
-  /* Light theme (default). */
-  --lightmetal-bg: #ffffff;
-  --lightmetal-bg-toolbar: #f7f8fa;
-  --lightmetal-border: #e3e6eb;
-  --lightmetal-color: #24292f;
-  --lightmetal-color-dim: #6a737d;
-  --lightmetal-hover: #edf0f4;
-  --lightmetal-accent: #556ee7;
-  --lightmetal-accent-soft: rgba(85, 110, 231, 0.12);
-  --lightmetal-error-fg: #b42318;
-  --lightmetal-error-bg: #fdecea;
+  color-scheme: var(--lightmetal-color-scheme, light dark);
+  --lightmetal-bg: light-dark(#ffffff, #16181c);
+  --lightmetal-bg-toolbar: light-dark(#f7f8fa, #1e2126);
+  --lightmetal-border: light-dark(#e3e6eb, #2c313a);
+  --lightmetal-color: light-dark(#24292f, #e6e9ee);
+  --lightmetal-color-dim: light-dark(#6a737d, #9aa4b2);
+  --lightmetal-hover: light-dark(#edf0f4, #262b33);
+  --lightmetal-accent: light-dark(#556ee7, #8fa0ff);
+  --lightmetal-accent-soft: light-dark(rgba(85, 110, 231, 0.12), rgba(143, 160, 255, 0.18));
+  --lightmetal-selection-bg: light-dark(#c4e3eb, #315663);
+  --lightmetal-selection-color: var(--lightmetal-color);
+  --lightmetal-error-fg: light-dark(#b42318, #ffb4ad);
+  --lightmetal-error-bg: light-dark(#fdecea, rgba(255, 99, 99, 0.16));
 
   border: 1px solid var(--lightmetal-border);
   border-radius: 10px;
@@ -30,37 +37,9 @@
   overflow: hidden;
 }
 
-/* Dark theme. */
-
-.lightmetal.lightmetal-dark {
-  --lightmetal-bg: #16181c;
-  --lightmetal-bg-toolbar: #1e2126;
-  --lightmetal-border: #2c313a;
-  --lightmetal-color: #e6e9ee;
-  --lightmetal-color-dim: #9aa4b2;
-  --lightmetal-hover: #262b33;
-  --lightmetal-accent: #8fa0ff;
-  --lightmetal-accent-soft: rgba(143, 160, 255, 0.18);
-  --lightmetal-error-fg: #ffb4ad;
-  --lightmetal-error-bg: rgba(255, 99, 99, 0.16);
-}
-
-/* Follow the system setting unless a theme is pinned. */
-
-@media (prefers-color-scheme: dark) {
-  .lightmetal:not(.lightmetal-light) {
-    --lightmetal-bg: #16181c;
-    --lightmetal-bg-toolbar: #1e2126;
-    --lightmetal-border: #2c313a;
-    --lightmetal-color: #e6e9ee;
-    --lightmetal-color-dim: #9aa4b2;
-    --lightmetal-hover: #262b33;
-    --lightmetal-accent: #8fa0ff;
-    --lightmetal-accent-soft: rgba(143, 160, 255, 0.18);
-    --lightmetal-error-fg: #ffb4ad;
-    --lightmetal-error-bg: rgba(255, 99, 99, 0.16);
-  }
-}
+/* Existing host-level pins also pass their mode to nested highlighted code. */
+.lightmetal.lightmetal-light { --lightmetal-color-scheme: light; }
+.lightmetal.lightmetal-dark { --lightmetal-color-scheme: dark; }
 
 /* Toolbar. */
 
@@ -148,6 +127,26 @@
   font: inherit;
   font-size: 13px;
 }
+
+.lightmetal .lightmetal-table-menu { width: 240px; padding: 6px; }
+.lightmetal-table-menu button {
+  display: block;
+  box-sizing: border-box;
+  width: 100%;
+  padding: 7px 10px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.lightmetal-table-menu button:enabled:hover,
+.lightmetal-table-menu button:focus-visible { background: var(--lightmetal-accent-soft); }
+.lightmetal-table-menu button:disabled { opacity: .4; cursor: default; }
+.lightmetal-table-menu button[aria-checked="true"] { background: var(--lightmetal-accent-soft); font-weight: 600; }
+.lightmetal-table-menu [role="separator"] { margin: 5px 4px; border-top: 1px solid var(--lightmetal-border); }
 
 .lightmetal .lightmetal-table-dropdown[hidden] {
   display: none;
@@ -326,6 +325,13 @@
 
 .lightmetal .lightmetal-sources[hidden] {
   display: none;
+}
+
+/* HTML editing fields are direct children; MaiDEn owns its stage outline. */
+.lightmetal > .lightmetal-content:focus-visible,
+.lightmetal > .lightmetal-sources:focus-visible {
+  outline: 2px solid var(--lightmetal-accent);
+  outline-offset: -2px;
 }
 
 /* Image drop highlight. */

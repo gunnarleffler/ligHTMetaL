@@ -1,6 +1,29 @@
 # Changelog
 
-## 0.5.0 (unreleased)
+## 0.6.0
+
+Includes MaiDEn and MeltDown from the unpublished 0.5.0 snapshot below.
+
+- Added poliSH: an independent syntax highlighter with 49 opt-in languages,
+  eleven themes, ANSI rendering, and standalone, minified, ESM, and CSS builds.
+  Optional MeltDown/MaiDEn integration replaces highlight.js in examples and tests;
+  existing hljs preview classes remain compatible.
+- Added shared light/dark/auto theming through `data-lightmetal-theme`, with local
+  editor and syntax-palette overrides and no shared runtime.
+- Added Table menus to both editors and explicit monospace table formatting in
+  MaiDEn. Native history, existing HTML controls, and configurable actions remain.
+- Made Tab entry writing-first. Improved HTML field names, toolbar pressed states,
+  keyboard-focus indicators, and MaiDEn selection contrast across skins.
+- Added default heading IDs and bare HTTP(S) links to MeltDown. Improved heading
+  slug handling, URL/emphasis boundaries, and duplicate-heading performance.
+- Reduced unnecessary source/preview DOM writes while retaining nodes and native
+  typing undo. Fixed toolbar-group refresh and syntax-palette class detection.
+- Expanded the four-library showcase, quickstarts, skin galleries, README preview,
+  and ANSI playground. Added browser, security, and script-free package checks.
+- Kept inline and whole-editor iframe integration, including split view; removed
+  the experimental parent-toolbar/child-writing-surface adapter.
+
+## 0.5.0 (unpublished development snapshot)
 
 - Added ligHTMetaL::MaiDEn, the Markdown editor, with styled source, a monospace
   writing area, and shared editor skins. Assets use `maiden.*`; the browser global

@@ -7,6 +7,7 @@ const fs = require("node:fs");
 const http = require("node:http");
 const path = require("node:path");
 const { chromium, firefox } = require("playwright");
+const { markdownSecurityChecks } = require("./security-markdown");
 const ROOT = path.resolve(__dirname, "..");
 const PNG = fs.readFileSync(path.join(ROOT, "examples/images/tiny.png"));
 const DATA = `data:image/png;base64,${PNG.toString("base64")}`;
@@ -477,6 +478,7 @@ async function runReview(engine, name, base) {
       };
     }, DATA);
     await filePage.close();
+    report.markdown = await markdownSecurityChecks(browser, base, payloads);
     return report;
   } finally { await browser.close(); }
 }
@@ -499,7 +501,7 @@ async function main() {
     } else if (url.pathname === "/tiny.png") {
       res.setHeader("Content-Type", "image/png");
       res.end(PNG);
-    } else if (/^\/dist\/lightmetal(?:\.esm|\.min)?\.(?:js|css)$/.test(url.pathname)) {
+    } else if (/^\/dist\/(?:lightmetal|maiden|MeltDown|polish)(?:\.esm|\.min)?\.(?:js|css)$/.test(url.pathname)) {
       res.setHeader("Content-Type", url.pathname.endsWith(".css") ? "text/css" : "text/javascript");
       res.end(fs.readFileSync(path.join(ROOT, url.pathname)));
     } else { res.writeHead(404).end(); }
@@ -514,7 +516,9 @@ async function main() {
     if (process.argv.includes("--json")) console.log(JSON.stringify(reports, null, 2));
     else for (const report of reports) {
       console.log(`security ${report.browser}: ${report.imports.length} import/paste cases, ` +
-        `${report.urls.length} URL cases, ${report.files.length} file cases, modes and native drops checked`);
+        `${report.urls.length} URL cases, ${report.files.length} file cases, modes and native drops checked; ` +
+        `${report.markdown.previewCases} preview/split cases, ${report.markdown.renderingCases} parser/highlighter cases, ` +
+        `${report.markdown.destinationCases} Markdown URL cases, ${report.markdown.sourceCases} source cases`);
     }
     for (const report of reports) {
       assert.equal(report.link.executions, 0, "Normal link prompt must reject JavaScript URLs");
@@ -522,6 +526,31 @@ async function main() {
       assert.equal(report.disabled.accepted, false, "Disabled images must reject API insertion");
       assert.equal(report.uploadBase64Disabled.accepted, false);
       assert.equal(report.importBase64Disabled, false);
+      assert.equal(report.imagePrompt.executions, 0);
+      assert.ok(!report.imagePrompt.html.includes("javascript:"));
+      for (const entry of report.async) {
+        assert.equal(entry.accepted, false, `Async insertion must reject ${entry.state}`);
+        assert.equal(entry.html, "<p>keep</p>");
+        assert.equal(entry.executions, 0);
+        assert.ok(!entry.errorHTML || !entry.errorHTML.includes("<img"), "Errors must remain text");
+        if (entry.state === "destroy") assert.equal(entry.children, 0);
+      }
+      assert.equal(report.fileProtocol.relativeImage, false);
+      assert.equal(report.fileProtocol.dataImage, true);
+      assert.ok(!report.fileProtocol.html.includes('href="relative"'));
+      assert.ok(!report.fileProtocol.html.includes('src="relative"'));
+      for (const entry of report.files) {
+        const expected = !["wrong MIME", "zero bytes", "above limit"].includes(entry.label);
+        assert.equal(entry.accepted, expected, `${entry.format}/${entry.label}`);
+        if ("executions" in entry) assert.equal(entry.executions, 0);
+      }
+      for (const entry of report.imports) assert.equal(entry.editorIntact, true, `${entry.route}/${entry.label}`);
+      for (const entry of report.imports.filter((e) => e.label === "positive formatting")) {
+        for (const markup of ['<h2>heading</h2>', '<b>bold</b>', '<i>italic</i>', 'href="/safe"']) assert.ok(entry.html.includes(markup));
+      }
+      for (const entry of report.imports.filter((e) => e.label === "positive table")) {
+        for (const markup of ['<caption>Tasks</caption>', '<col span="2">', 'id="header"', 'scope="col"', 'headers="header"']) assert.ok(entry.html.includes(markup));
+      }
       for (const entry of report.imports.filter((e) => e.label === "data image import")) {
         assert.ok(entry.html.includes(DATA), "Base64 images must survive import/paste");
       }

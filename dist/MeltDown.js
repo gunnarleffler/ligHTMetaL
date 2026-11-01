@@ -31,6 +31,57 @@ var meltDown = (() => {
   );
   var unescape = (text) => text.replace(/\\([!-/:-@\[-`{-~])/g, "$1");
   var referenceKey = (text) => unescape(text).trim().replace(/\s+/g, " ").toLowerCase();
+  var HEADING_ENTITIES = {
+    amp: "&",
+    AMP: "&",
+    lt: "<",
+    LT: "<",
+    gt: ">",
+    GT: ">",
+    quot: '"',
+    QUOT: '"',
+    apos: "'",
+    nbsp: " ",
+    colon: ":"
+  };
+  var NUMERIC_ENTITIES = {
+    128: 8364,
+    130: 8218,
+    131: 402,
+    132: 8222,
+    133: 8230,
+    134: 8224,
+    135: 8225,
+    136: 710,
+    137: 8240,
+    138: 352,
+    139: 8249,
+    140: 338,
+    142: 381,
+    145: 8216,
+    146: 8217,
+    147: 8220,
+    148: 8221,
+    149: 8226,
+    150: 8211,
+    151: 8212,
+    152: 732,
+    153: 8482,
+    154: 353,
+    155: 8250,
+    156: 339,
+    158: 382,
+    159: 376
+  };
+  function headingEntities(text) {
+    return text.replace(/&([a-z][a-z\d]*|#\d+|#x[\da-f]+);/gi, (_, name) => {
+      if (name[0] !== "#") return Object.hasOwn(HEADING_ENTITIES, name) ? HEADING_ENTITIES[name] : "";
+      const hex = name[1].toLowerCase() === "x";
+      let point = Number.parseInt(name.slice(hex ? 2 : 1), hex ? 16 : 10);
+      if (!point || point > 1114111 || point >= 55296 && point <= 57343) point = 65533;
+      return String.fromCodePoint(NUMERIC_ENTITIES[point] ?? point);
+    });
+  }
   var EMAIL_ADDRESS = /^[a-z\d.!#$%&'*+/=?^_`{|}~-]+@[a-z\d](?:[a-z\d-]*[a-z\d])?(?:\.[a-z\d](?:[a-z\d-]*[a-z\d])?)*$/i;
   var HTML_BLOCK_TAGS = new Set("address article aside base basefont blockquote body caption center col colgroup dd details dialog dir div dl dt fieldset figcaption figure footer form frame frameset h1 h2 h3 h4 h5 h6 head header hr html iframe legend li link main menu menuitem nav noframes ol optgroup option p param search section summary table tbody td tfoot th thead title tr track ul".split(" "));
   function safeDestination(url, image = false) {
@@ -155,6 +206,30 @@ var meltDown = (() => {
     const tag = source.match(/^(?:<\/[a-z][a-z\d-]*\s*>|<[a-z][a-z\d-]*(?:\s+[a-z_:][a-z\d_:.-]*(?:\s*=\s*(?:"[^"]*"|'[^']*'|[^\s"'=<>`]+))?)*\s*\/?>)/i);
     return tag ? { type: "html", tag: true, raw: tag[0], end: start + tag[0].length } : null;
   }
+  function bareURLAt(text, start, previous) {
+    if (start && /[\p{L}\p{N}/\\<]/u.test(text[start - 1])) return null;
+    if (text[start - 1] === "_" && !(previous?.char === "_" && previous.open)) return null;
+    if (!/^https?:\/\//i.test(text.slice(start, start + 8))) return null;
+    const match = text.slice(start).match(/^https?:\/\/[^\s<>"'`*]+/i);
+    if (!match) return null;
+    let label = match[0];
+    const balance = { ")": 0, "]": 0, "}": 0 };
+    const closing2 = { "(": ")", "[": "]", "{": "}" };
+    for (const char of label) {
+      if (closing2[char]) balance[closing2[char]]++;
+      else if (char in balance) balance[char]--;
+    }
+    while (label) {
+      const last = label.at(-1);
+      if (/[.,!?:;~]/.test(last)) label = label.slice(0, -1);
+      else if (last in balance && balance[last] < 0) {
+        balance[last]++;
+        label = label.slice(0, -1);
+      } else break;
+    }
+    if (!/^https?:\/\/[^/?#]+/i.test(label)) return null;
+    return { type: "autolink", label, url: label, raw: label, end: start + label.length };
+  }
   function angleAt(text, start) {
     const match = text.slice(start).match(/^<([^<>\s]+)>/);
     if (match) {
@@ -270,6 +345,20 @@ var meltDown = (() => {
       } else if ((text[i] === "[" || text.startsWith("![", i)) && (token = linkAt(text, i, context.references))) {
         tokens.push(token);
         i = token.end;
+      } else if (links && (text[i] === "h" || text[i] === "H") && (token = bareURLAt(text, i, tokens.at(-1)))) {
+        const underscores = token.label.match(/_+$/)?.[0];
+        const suffix = underscores && delimiter(text, token.end - underscores.length);
+        if (suffix?.close) {
+          token.label = token.url = token.raw = token.label.slice(0, -underscores.length);
+          token.end -= underscores.length;
+          suffix.urlSuffix = true;
+          token.suffix = suffix;
+          tokens.push(token, suffix);
+          i = suffix.end;
+        } else {
+          tokens.push(token);
+          i = token.end;
+        }
       } else if (text.startsWith(':"', i) || text.startsWith('":', i)) {
         const raw = text.slice(i, i + 2);
         tokens.push({ type: "delimiter", char: "q", raw, count: 1, open: raw === ':"', close: raw === '":' });
@@ -282,21 +371,32 @@ var meltDown = (() => {
       }
     }
     const render = (nodes, level) => nodes.map((node) => {
-      if (node.type === "text") return plain ? node.text : escapeText(node.text);
-      if (node.type === "delimiter") return plain ? node.raw.repeat(node.count) : escapeText(node.raw.repeat(node.count));
+      if (node.type === "text") return plain ? context.headingText ? headingEntities(node.text) : node.text : escapeText(node.text);
+      if (node.type === "delimiter") return node.urlSuffix ? "" : plain ? node.raw.repeat(node.count) : escapeText(node.raw.repeat(node.count));
       if (node.type === "br") return plain ? " " : "<br>\n";
       if (node.type === "code") return plain ? node.text : `<code>${escapeHTML(node.text)}</code>`;
-      if (node.type === "html") return plain || context.allowHTML ? node.raw : escapeHTML(node.raw);
+      if (node.type === "html") {
+        if (plain) return context.headingText && context.allowHTML ? "" : node.raw;
+        return context.allowHTML ? node.raw : escapeHTML(node.raw);
+      }
       if (node.type === "autolink") {
-        if (!links || !safeDestination(node.url)) return plain ? node.raw : escapeHTML(node.raw);
-        return plain ? node.label : `<a href="${escapeHTML(node.url)}">${escapeHTML(node.label)}</a>`;
+        const suffix = node.suffix ? "_".repeat(node.suffix.count) : "";
+        const url = node.url + suffix, label = node.label + suffix, raw = node.raw + suffix;
+        if (!links || !safeDestination(url)) return plain ? raw : escapeHTML(raw);
+        return plain ? label : `<a href="${escapeHTML(url)}">${escapeHTML(label)}</a>`;
       }
       if (node.type === "link") {
         if (!node.target || !safeDestination(node.target.url, node.image) || !links && !node.image) {
           return plain ? node.raw : escapeHTML(node.raw);
         }
         const { url, title, style } = node.target;
-        const label = inline(node.label, context, level + 1, false, plain || node.image);
+        const label = inline(
+          node.label,
+          node.image && context.headingText ? { ...context, headingText: false } : context,
+          level + 1,
+          false,
+          plain || node.image
+        );
         if (plain) return label;
         const titleAttr = title === void 0 ? "" : ` title="${escapeHTML(title)}"`;
         if (node.image) return `<img src="${escapeHTML(url)}" alt="${escapeHTML(label)}"${titleAttr}${style ? ` style="${style}"` : ""}>`;
@@ -565,9 +665,17 @@ var meltDown = (() => {
         case "html":
           html = node.text;
           break;
-        case "heading":
-          html = `<h${node.level}>${inline(node.text, context)}</h${node.level}>`;
+        case "heading": {
+          const text = inline(node.text, { ...context, headingText: true }, 0, true, true);
+          const slug = text.toLowerCase().replace(/[^\p{L}\p{N}\p{M}_\-\s]/gu, "").replace(/\s/g, "-") || "section";
+          let suffix = context.headingSuffixes.get(slug) ?? 0;
+          let id = suffix ? slug + "-" + suffix : slug;
+          while (context.headingIds.has(id)) id = slug + "-" + ++suffix;
+          context.headingSuffixes.set(slug, suffix + 1);
+          context.headingIds.add(id);
+          html = `<h${node.level} id="${id}">${inline(node.text, context)}</h${node.level}>`;
           break;
+        }
         case "hr":
           html = "<hr>";
           break;
@@ -606,7 +714,7 @@ var meltDown = (() => {
     const { html = "escape", highlight } = options;
     if (html !== "escape" && html !== "allow") throw new TypeError('html must be "escape" or "allow"');
     if (highlight !== void 0 && typeof highlight !== "function") throw new TypeError("highlight must be a function");
-    const context = { references: /* @__PURE__ */ new Map(), allowHTML: html === "allow", highlight };
+    const context = { references: /* @__PURE__ */ new Map(), headingIds: /* @__PURE__ */ new Set(), headingSuffixes: /* @__PURE__ */ new Map(), allowHTML: html === "allow", highlight };
     const nodes = blocks(markdown.replace(/\r\n?/g, "\n").split("\n"), context);
     return renderBlocks(nodes, context);
   }

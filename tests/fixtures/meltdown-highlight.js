@@ -1,13 +1,7 @@
-/* Test-only optional highlighter chain; never imported by shipped builds. */
+/* Test-only optional highlighter chain; never imported by editor/parser builds. */
 import { parse } from '../../src/MeltDown.js';
-import hljs from 'highlight.js/lib/core';
-import javascript from 'highlight.js/lib/languages/javascript';
-import bash from 'highlight.js/lib/languages/bash';
-hljs.registerLanguage('javascript', javascript);
-hljs.registerLanguage('bash', bash);
-export const render = source => parse(source, {
-  highlight(code, language) {
-    if (!language || !hljs.getLanguage(language)) return null;
-    return hljs.highlight(code, { language, ignoreIllegals: true }).value;
-  }
-});
+import { createHighlighter } from '../../src/polish.js';
+import javascript from '../../src/polish/languages/javascript.js';
+import bash from '../../src/polish/languages/bash.js';
+const { highlight } = createHighlighter({ languages: [javascript, bash], guessLanguage: false });
+export const render = source => parse(source, { highlight });

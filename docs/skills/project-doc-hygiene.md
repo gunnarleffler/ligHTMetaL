@@ -1,13 +1,14 @@
 ---
 name: project-doc-hygiene
-description: Review and maintain internal project documentation. Remove obsolete information, eliminate redundancy, and preserve concise, accurate descriptions of the current project state. Prefer deletion over summarization when information is no longer useful. Optimize documentation for human understanding and efficient LLM context usage.
-version: 1.2.0
+description: Clean up project documentation by removing outdated information, capturing enduring knowledge, and reducing unnecessary words, tokens, and future reading effort. Preserve accurate, useful guidance for humans and LLMs, including purposeful repetition where it improves correct use.
+version: 1.5.0
 ---
 
 # Project Documentation Hygiene
 
-Maintain concise, accurate project documentation optimized for
-human understanding and efficient LLM context usage.
+Remove outdated information, capture important knowledge, and reduce
+future reading effort for humans and LLMs. Optimize for correct use and
+understanding with fewer words and tokens, not minimum length alone.
 
 ## Core Principles
 
@@ -21,6 +22,48 @@ human understanding and efficient LLM context usage.
 
 Git preserves development history. Project documentation should
 describe what exists, how it works, and what remains unresolved.
+
+## Audience and Document Roles
+
+Follow the project's existing documentation conventions. Identify documents
+by purpose, not filename alone. Include agent-facing guides such as `llms.txt`
+when present, not only Markdown files.
+
+Common roles include:
+- `README.md`: Human-facing introduction, setup, and normal workflows.
+- `PROJECT_NOTES.md`: Enduring development knowledge, architecture,
+  constraints, design rationale, and unresolved work. Not a development diary.
+- `llms.txt`: Operational entry point for LLMs using the project. Keep it
+  short, actionable, and useful for completing common tasks correctly.
+
+These are examples, not a required file layout. Equivalent roles may use
+other names or span several documents. Readers may consult multiple files.
+
+Preserve useful topic-specific documentation, such as architecture guides,
+operational runbooks, tutorials, and API references. Do not collapse a useful
+documentation tree into a few large files merely to reduce file count.
+Conversely, do not split content or create files merely to satisfy a template.
+Choose organization that reduces effort to find, understand, and maintain information.
+
+### LLM Operating Guidance
+
+Prioritize information an LLM cannot safely infer:
+- Where to start and where authoritative details live.
+- Common tasks, representative commands, prerequisites, and verification steps.
+- Which artifacts are authoritative evidence, configuration, drafts, or generated output.
+- Project-specific result meanings, uncertainty, and easily confused distinctions.
+- Safety boundaries and actions requiring human authorization.
+
+Intentional redundancy in `llms.txt` is acceptable when it prevents mistakes
+or avoids consulting several documents for a common task. Keep repeated
+guidance consistent with its authoritative source. Do not remove essential
+instructions or safeguards solely because they appear elsewhere.
+
+Prefer CLI help over exhaustive option lists. Link to deeper documentation
+with a brief indication of when to read it. Remove repetition within the
+guide, incidental implementation details, and low-value examples before
+removing consequential constraints. Judge brevity by successful task
+completion per token, not file length alone.
 
 ## Review Rules
 
@@ -40,7 +83,7 @@ Remove:
 - Resolved bug narratives and debugging histories.
 - Completed tasks and obsolete TODOs.
 - Superseded designs and abandoned approaches.
-- Redundant explanations and duplicated instructions.
+- Redundant explanations and duplicated instructions that serve no audience-specific purpose.
 - Historical status updates without continuing relevance.
 - Implementation details obvious from the code.
 
@@ -84,12 +127,24 @@ Do not maintain a running development diary in project documentation.
 
 Each concept should have one authoritative description.
 
-- Merge duplicate explanations.
+- Merge duplicate explanations that serve no distinct purpose.
 - Update existing content instead of appending new sections.
-- Reference authoritative documentation rather than copying it.
+- Prefer references to authoritative documentation over copying it.
+- Allow concise repetition where a document's audience needs it to act correctly,
+  especially in `llms.txt`; keep all copies consistent.
 - Avoid restating information already clear from code or configuration.
 
-Do not create additional documentation files without a clear purpose.
+A cleanup request authorizes edits to existing documentation within scope,
+including removal of obsolete passages, but not creation or deletion of whole
+files. Unless explicitly authorized, defer file creation, deletion, and moves
+that require either operation until approval. Continue other unambiguous edits.
+
+At the end of the report, request approval for each proposed file operation:
+- Creation: state the path, purpose, and why existing documents are insufficient.
+- Deletion: state the path, why the file is unnecessary, and where any useful
+  content will remain or be transferred.
+
+Make the case for each operation; a general cleanup request is not approval.
 
 ### 5. Information Value Per Token
 
@@ -154,7 +209,10 @@ Treat implementation as authoritative for observed behavior,
 but preserve explicit requirements that the implementation
 may not yet satisfy.
 
-Flag unresolved contradictions rather than guessing.
+If a contradiction cannot be resolved from available evidence, leave the
+contested content unchanged and continue independent cleanup. At the end of
+the report, ask a focused question that identifies the contradiction and the
+decision needed. Do not guess or add speculative caveats to the documentation.
 
 ### 8. Avoid Documentation Cruft
 
@@ -243,21 +301,25 @@ Do not rewrite clear text merely to satisfy a stylistic preference.
 
 ## Review Process
 
-1. Identify each document's purpose.
+1. Identify the existing documentation structure, each document's audience and purpose,
+   and the common tasks it supports.
 2. Distinguish temporary working notes from persistent documentation.
 3. Identify obsolete, redundant, or inaccurate content.
 4. Delete information without continuing relevance.
-5. Consolidate duplicate descriptions.
+5. Consolidate unnecessary duplication; verify purposeful repetition stays consistent.
 6. Preserve active requirements and enduring design rationale.
 7. Transfer useful knowledge from completed work into existing documentation.
-8. Rewrite retained content for clarity and information density.
+8. Rewrite retained content to reduce words, tokens, and effort needed to find and use it.
 9. Verify important constraints and technical claims.
 10. Remove cleanup commentary from the documentation.
 
 Prefer editing existing documents over creating new ones.
 
 Do not restructure documentation unless it improves navigation
-or eliminates meaningful duplication.
+or eliminates meaningful duplication. Keep links and entry points accurate
+when moving, merging, or removing content. Obtain approval before creating
+or deleting files as part of restructuring; defer those operations and request
+permission at the end of the report.
 
 ## Decision Rule
 
@@ -274,7 +336,10 @@ Do not generate a formal relevance score or audit table.
 
 ## Output
 
-Edit documentation directly when authorized.
+When asked to clean up documentation, make clear, supported edits to existing
+files automatically. A review-only request does not authorize edits. Do not
+pause the whole cleanup for isolated ambiguity or unapproved file operations;
+defer only the affected changes.
 
 Preserve existing organization unless restructuring improves clarity.
 
@@ -285,9 +350,18 @@ Do not add:
 - Speculative requirements or defensive caveats.
 - Documentation explaining the documentation cleanup.
 
-When reporting completion, briefly state:
+After completing the unambiguous cleanup, briefly report:
 - Material changes made.
 - Important information intentionally preserved.
-- Any unresolved accuracy concerns.
+- Unresolved accuracy concerns and deferred changes, if any.
+
+End the report with focused questions about unresolved ambiguities and requests
+for permission to create or delete files, including the case for each operation.
+Group related questions and ask only for decisions needed to proceed. Do not
+repeat questions already answered or request permission for routine in-scope edits.
+
+Use the answers and approvals for a follow-up pass. Do not treat proposed or
+deferred changes as completed. If nothing needs clarification or approval,
+finish with the brief report alone.
 
 Do not produce detailed change logs unless requested.

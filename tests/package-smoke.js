@@ -21,6 +21,7 @@ const bundles = [
   "maiden.js", "maiden.min.js", "maiden.esm.js",
   "maiden.css", "maiden.min.css",
   "MeltDown.js", "MeltDown.min.js", "MeltDown.esm.js",
+  "polish.js", "polish.min.js", "polish.esm.js", "polish.css", "polish.min.css",
   ...skinNames.flatMap((name) => [`skins/${name}.css`, `skins/${name}.min.css`])
 ];
 
@@ -40,8 +41,11 @@ async function main() {
     // npm 12 keys results by package name; older versions return an array.
     const [packed] = Array.isArray(packResult) ? packResult : Object.values(packResult);
     const files = packed.files.map((file) => file.path).sort();
+    const polishSources = fs.readdirSync(path.join(ROOT, 'src/polish'), { recursive: true }).filter(name => name.endsWith('.js')).map(name => 'src/polish/' + name);
+    assert.equal(polishSources.length, 69, 'Review the poliSH source allowlist when adding modules');
     assert.deepEqual(files, [
-      "CHANGELOG.md", "LICENSE", "README.md", "package.json", "ligHTMetaL.png", "docs/MeltDown.md",
+      "CHANGELOG.md", "LICENSE", "README.md", "package.json", "ligHTMetaL.png", "docs/reference.md", "docs/MeltDown.md", "docs/poliSH.md", "docs/specs/polish-spec.md",
+      'src/polish.js', 'src/polish-full.js', 'src/polish-languages.js', 'src/polish.css', ...polishSources,
       "src/MeltDown.js", "src/lightmetal.js", "src/lightmetal.css", "src/maiden.js", "src/maiden.css", "src/markdown-preview.js", "src/toolbar-groups.js",
       ...skinNames.map((name) => `src/skins/${name}.css`),
       ...bundles.map((name) => `dist/${name}`)
@@ -70,7 +74,7 @@ async function main() {
       );
     }
 
-    assert.match(fs.readFileSync(path.join(installed, "README.md"), "utf8"), /src="ligHTMetaL\.png"/);
+    assert.match(fs.readFileSync(path.join(installed, "README.md"), "utf8"), /src="https:\/\/cdn\.jsdelivr\.net\/npm\/lightmetal@latest\/ligHTMetaL\.png"/);
     assert.deepEqual(
       fs.readFileSync(path.join(installed, "ligHTMetaL.png")),
       fs.readFileSync(path.join(ROOT, "ligHTMetaL.png")),
@@ -84,6 +88,10 @@ async function main() {
       import "lightmetal/dist/skins/frost.css";
       import { init as initMarkdown } from "lightmetal/dist/maiden.esm.js";
       import "lightmetal/dist/maiden.css";
+      import { createHighlighter } from 'lightmetal/src/polish.js';
+      import javascript from 'lightmetal/src/polish/languages/javascript.js';
+      import 'lightmetal/dist/polish.css';
+      window.__polish = createHighlighter({ languages: [javascript] });
       const markdownElement = document.getElementById("markdown-editor");
       markdownElement.classList.add("lightmetal-frost");
       window.__initMarkdown = initMarkdown;
@@ -101,6 +109,16 @@ async function main() {
       if (url.pathname === "/") {
         const mode = url.searchParams.get("mode");
         const prefix = "/node_modules/lightmetal/dist/";
+        if (url.searchParams.has('polish')) {
+          const script = mode === 'esm' ? `<script type="module">
+            import { createHighlighter, allLanguages } from '${prefix}polish.esm.js';
+            window.__polish = createHighlighter({ languages: allLanguages });
+          </script>` : `<script src="${prefix}polish${mode === 'min' ? '.min' : ''}.js"></script>
+            <script>window.__polish = polish.createHighlighter({ languages: polish.allLanguages });</script>`;
+          res.setHeader('Content-Type', 'text/html');
+          res.end(`<!doctype html><link rel="stylesheet" href="${prefix}polish${mode === 'min' ? '.min' : ''}.css"><pre class="code theme-light"><code id="polish-code"></code></pre>${script}`);
+          return;
+        }
         if (url.searchParams.has("markdown")) {
           const min = mode === "min";
           const script = mode === "esm" ? `<script type="module">
@@ -169,7 +187,11 @@ async function main() {
           assert.equal(await page.evaluate(() =>
             getComputedStyle(window.__editor.content).height
           ), "300px", "Packaged CSS did not load");
-          if (mode === "bundler") await runMarkdownSmoke(page);
+          if (mode === "bundler") {
+            await runMarkdownSmoke(page);
+            assert.match(await page.evaluate(() => __polish.highlight('const x = 42;', 'js')), /token keyword/);
+            assert.equal(await page.evaluate(() => __polish.hasLanguage('python')), false, 'Selected-language bundle must not import the full catalog');
+          }
           await page.evaluate(() => window.__editor.destroy());
           assert.equal(await page.locator("#editor").innerHTML(), "");
           assert.deepEqual(errors, []);
@@ -186,11 +208,30 @@ async function main() {
           assert.deepEqual(errors, []);
           await page.close();
         }
+        for (const mode of ['iife', 'min', 'esm']) {
+          const page = await browser.newPage();
+          await page.goto(`${base}/?polish=1&mode=${mode}`);
+          await page.waitForFunction(() => window.__polish);
+          const result = await page.evaluate(() => {
+            const code = document.getElementById('polish-code');
+            code.innerHTML = __polish.highlight('const value = 42;', 'js');
+            return { color: getComputedStyle(code.querySelector('.token.keyword')).color,
+              text: code.textContent, python: __polish.hasLanguage('python'),
+              escaped: __polish.highlight('<img onerror=alert(1)>', 'unknown'),
+              ansi: __polish.highlight('\u001b[31mred\u001b[0m', 'ansi') };
+          });
+          assert.equal(result.text, 'const value = 42;');
+          assert.equal(result.color, 'rgb(207, 34, 46)');
+          assert.equal(result.python, true);
+          assert.match(result.escaped, /&lt;img/);
+          assert.match(result.ansi, /color:rgb/);
+          await page.close();
+        }
         await runSkinChecks(browser, `${base}/?mode=iife`, `${base}/node_modules/lightmetal/dist/`);
       } finally {
         await browser.close();
       }
-      console.log(`package ${name}: HTML + Markdown IIFE/minified/ESM/bundler, ${skinNames.length} skins (plain/minified) ok`);
+      console.log(`package ${name}: HTML + Markdown + poliSH IIFE/minified/ESM/bundler, ${skinNames.length} skins (plain/minified) ok`);
     }
     console.log(`package ${metadata.version}: ${files.length} files; script-free install ok`);
     if (ARCHIVE) console.log(`Verified archive: ${ARCHIVE}`);

@@ -5,6 +5,7 @@ const element = document.getElementById("editor");
 element.style.setProperty("--lightmarkdown-height", "320px");
 window.__markdownEditor = maiden.init({
   element,
+  preview: { render: polishDemo.render },
   onChange(markdown) {
     // Same-origin example glue: send text, not HTML, to the parent application.
     window.frameElement?.dispatchEvent(new CustomEvent("markdownchange", { detail: markdown }));

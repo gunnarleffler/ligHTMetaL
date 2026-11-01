@@ -208,26 +208,18 @@ async function imageChecks(browser, base, name) {
     assert.equal(await page.evaluate(() => !__deadContent.dispatchEvent(new KeyboardEvent("keydown", { key: "M", altKey: true, shiftKey: true, bubbles: true, cancelable: true }))), false);
     assert.equal(await page.locator("#editor img").count(), 0); monitor = false;
 
-    for (const mode of ["whole", "surface"]) {
-      await page.goto(base + (mode === "whole" ? "/examples/markdown-iframe.html" : "/examples/markdown.html?mode=isolated"));
-      if (mode === "whole") {
-        await page.waitForFunction(() => !document.getElementById("read-markdown").disabled);
-        await page.frameLocator("#isolated-editor").locator(".lightmarkdown-input").evaluate(node => {
-          const win = node.ownerDocument.defaultView, host = node.closest(".lightmarkdown"); win.__markdownEditor.destroy(); win.__imageChanges = 0;
-          win.__markdownEditor = win.maiden.init({ element: host, actions: ["image", "undo", "redo"], onChange: () => win.__imageChanges++ });
-          win.__markdownEditor.setMarkdown("photo.png"); win.__imageChanges = 0;
-        });
-      } else {
-        await page.waitForFunction(() => window.__markdownEditor && __markdownMode === "isolated");
-        await page.evaluate(async () => {
-          __markdownEditor.destroy(); window.__imageChanges = 0;
-          window.__markdownEditor = await __initMarkdownSurface({ element: document.getElementById("markdown-editor"), actions: ["image", "undo", "redo"], onChange: () => __imageChanges++ });
-          __markdownEditor.setMarkdown("photo.png"); window.__imageChanges = 0;
-        });
-      }
-      const view = page.frameLocator(mode === "whole" ? "#isolated-editor" : ".lightmarkdown-surface-frame");
-      const input = view.locator(".lightmarkdown-input"), bar = (mode === "whole" ? view : page).getByRole("group", { name: "Markdown formatting" });
-      const read = () => mode === "whole" ? input.evaluate(node => node.ownerDocument.defaultView.__markdownEditor.getMarkdown()) : page.evaluate(() => __markdownEditor.getMarkdown());
+    // The complete editor, including its toolbar, belongs to the child document.
+    {
+      await page.goto(base + "/examples/markdown-iframe.html");
+      await page.waitForFunction(() => !document.getElementById("read-markdown").disabled);
+      const view = page.frameLocator("#isolated-editor");
+      const input = view.locator(".lightmarkdown-input"), bar = view.getByRole("group", { name: "Markdown formatting" });
+      await input.evaluate(node => {
+        const win = node.ownerDocument.defaultView, host = node.closest(".lightmarkdown"); win.__markdownEditor.destroy(); win.__imageChanges = 0;
+        win.__markdownEditor = win.maiden.init({ element: host, actions: ["image", "undo", "redo"], onChange: () => win.__imageChanges++ });
+        win.__markdownEditor.setMarkdown("photo.png"); win.__imageChanges = 0;
+      });
+      const read = () => input.evaluate(node => node.ownerDocument.defaultView.__markdownEditor.getMarkdown());
       await input.evaluate(node => {
         const doc = node.ownerDocument, range = doc.createRange(); range.selectNodeContents(node.firstChild);
         node.focus(); doc.getSelection().removeAllRanges(); doc.getSelection().addRange(range); node.dispatchEvent(new Event("focus"));
@@ -235,7 +227,7 @@ async function imageChecks(browser, base, name) {
       monitor = true; await bar.getByRole("button", { name: "Image", exact: true }).click();
       assert.equal(await read(), image("photo.png"));
       assert.equal(await input.evaluate(node => node.ownerDocument.getSelection().toString()), "photo.png");
-      assert.equal(mode === "whole" ? await input.evaluate(node => node.ownerDocument.defaultView.__imageChanges) : await page.evaluate(() => __imageChanges), 1);
+      assert.equal(await input.evaluate(node => node.ownerDocument.defaultView.__imageChanges), 1);
       await page.keyboard.press("Control+z"); assert.equal(await read(), "photo.png");
       await page.keyboard.press("Control+Shift+z"); assert.equal(await read(), image("photo.png"));
       await input.evaluate(node => {
@@ -245,7 +237,7 @@ async function imageChecks(browser, base, name) {
       await bar.getByRole('button', { name: 'Image', exact: true }).click();
       assert.equal(await input.evaluate(node => node.ownerDocument.getSelection().toString()), 'photo.png');
       assert.equal(await read(), image('photo.png'));
-      assert.equal(mode === 'whole' ? await input.evaluate(node => node.ownerDocument.defaultView.__imageChanges) : await page.evaluate(() => __imageChanges), 3);
+      assert.equal(await input.evaluate(node => node.ownerDocument.defaultView.__imageChanges), 3);
       await page.keyboard.type('new.png'); assert.equal(await read(), image('new.png'));
       await page.keyboard.press('Control+z'); assert.equal(await read(), image('photo.png'));
       await page.keyboard.press('Control+z'); assert.equal(await read(), 'photo.png'); monitor = false;

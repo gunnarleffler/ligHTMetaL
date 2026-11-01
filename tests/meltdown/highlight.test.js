@@ -1,11 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createRequire } from 'node:module';
 import { parse } from '../../src/MeltDown.js';
-const require = createRequire(import.meta.url);
-const hljs = require('highlight.js/lib/core');
-hljs.registerLanguage('javascript', require('highlight.js/lib/languages/javascript'));
-hljs.registerLanguage('bash', require('highlight.js/lib/languages/bash'));
+import { createHighlighter } from '../../src/polish.js';
+import javascript from '../../src/polish/languages/javascript.js';
+import bash from '../../src/polish/languages/bash.js';
 
 test('highlight receives raw fenced code and language, not inline code', () => {
   const calls = [];
@@ -46,11 +44,10 @@ test('hooks stay parse-local and do not sanitize their trusted HTML output', () 
   assert.equal(parse(source), '<pre><code>x</code></pre>');
 });
 
-test('real highlight.js handles explicit languages, aliases and plain fallbacks', () => {
-  const highlight = (code, language) => language && hljs.getLanguage(language)
-    ? hljs.highlight(code, { language, ignoreIllegals: true }).value : null;
-  assert.match(parse('```javascript\nconst answer = 42;\n```', { highlight }), /hljs-keyword/);
-  assert.match(parse('```js\nconst answer = 42;\n```', { highlight }), /hljs-keyword/);
-  assert.match(parse('```bash\necho "hello"\n```', { highlight }), /hljs-/);
+test('poliSH handles explicit languages, aliases and plain fallbacks', () => {
+  const { highlight } = createHighlighter({ languages: [javascript, bash], guessLanguage: false });
+  assert.match(parse('```javascript\nconst answer = 42;\n```', { highlight }), /token keyword/);
+  assert.match(parse('```js\nconst answer = 42;\n```', { highlight }), /token keyword/);
+  assert.match(parse('```bash\necho "hello"\n```', { highlight }), /token string/);
   for (const language of ['', 'unknown']) assert.match(parse('```' + language + '\n<tag>\n```', { highlight }), /&lt;tag&gt;/);
 });

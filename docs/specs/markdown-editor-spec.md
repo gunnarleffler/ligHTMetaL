@@ -77,16 +77,16 @@ Milestone numbers refer to section 5.
 | `link` | Yes | `link` | Preview | M3: insert a prompt-free template with an escaped label and selected URL. |
 | `image` | Yes | `image` | Preview | M4: prompt-free template; selected text supplies its URL. Select an existing inline image's URL for replacement. |
 | `upload-image` | No | `image-file` | Deferred | Future nice-to-have: file picking with an explicit local/app strategy. Not required for M4. |
-| `table` | No | `table` | Preview | M4: default grid/manual size picker; optional row/column add/delete and alignment actions. |
+| `table` | No | `table` | Preview | M4: default menu for formatted insertion, source padding, row/column editing, and alignment. |
 | `horizontal-rule` | No | `line` | Preview | M3: insert a rule with safe paragraph boundaries. |
-| `preview` | Yes | `preview` | Missing | M5: toggle an optional, safely rendered preview. |
-| `side-by-side` | Yes | `side-by-side` | Missing | M5: show editable source and rendered preview together. |
-| `fullscreen` | Yes | `fullscreen` | Missing | M5: expand the editor and restore the original page/focus state. |
-| `guide` | Yes | `guide` | Missing | M5: open useful offline help without a network dependency. |
+| `preview` | Yes | `preview` | Preview | M5: toggle an optional, safely rendered preview. |
+| `side-by-side` | Yes | `side-by-side` | Preview | M5: show editable source and rendered preview together. |
+| `fullscreen` | Yes | `fullscreen` | Preview | M5: expand the editor and restore the original page/focus state. |
+| `guide` | Yes | `guide` | Preview | M5: open useful offline help without a network dependency. |
 | `undo` | No | `undo` | Preview | M1/M3: follow native document history; demonstrate independent history in the iframe example. |
 | `redo` | No | `redo` | Preview | M1/M3: replay the corresponding edit predictably. |
 
-There are 20 mapped Preview controls, four Missing controls, one Deferred control, and one Omitted
+There are 24 mapped Preview controls, one Deferred control, and one Omitted
 control. Do not mark a row complete just because an icon appears or a callback
 exists.
 
@@ -143,22 +143,26 @@ recovery helper must be a separate, explicit opt-in with clear data ownership.
 ### M1 — Decide and prove the editing architecture
 
 **Architecture decided:** keep the minimal inline core and synchronous `init()`.
-The user approved browser-owned native history as the default. Chromium/Firefox
-isolate history in a whole-editor iframe; Linux WebKit still shares it across
-frames. This remains an open compatibility limitation, not a new-engine decision.
+The user approved browser-owned native history as the default. A whole-editor
+iframe provides a separate editing document, not a cross-browser history guarantee.
+Linux WebKit can share history across frames, and the current automated Firefox
+runtime has native cross-document focus/input limitations. These do not call for
+a new engine or custom history.
 Applications can load the whole editor inside their own iframe;
 see `examples/markdown-iframe.html`. The library does not create or manage frames.
-The parent-toolbar adapter stays an optional example, not a production API.
+Supported integration keeps toolbar, source, preview, and dialogs in one document.
+The parent-toolbar/child-writing-surface experiment is removed. Side-by-side
+source/preview remains supported inline and inside a whole-editor iframe.
 
-[M1 findings](../markdown-m1-findings.md) records the experiments, targeted fixes,
-and initial performance samples. Input, accessibility, and performance validation
+[M1 findings](../markdown-m1-findings.md) summarizes the architecture constraints
+and optional diagnostics. Input, accessibility, and performance validation
 remain open; this decision is not a production-readiness claim.
 
 Resolve the highest-risk findings before adding more controls:
 
 1. Undo is document-owned. In both tested browsers, Undo in editor A can undo
    the latest edit in B. Keep this approved native behavior explicit and test the
-   optional iframe example's independent history.
+   whole-editor iframe's native editing and history.
 2. Removing unrelated DOM children or assigning another textarea's value can
    split Chromium typing groups. The paint cache avoids our own mutations, but
    an application callback can reintroduce the problem.
@@ -169,8 +173,7 @@ Resolve the highest-risk findings before adding more controls:
 
 The isolation comparison is complete enough to choose an application-owned
 example instead of library integration. Keep its focus, selection, local assets,
-file use, lifecycle, and callbacks tested. Do not promote the async parent-toolbar
-facade into the synchronous library API. An iframe does not fix syntax, geometry,
+file use, lifecycle, and callbacks tested. An iframe does not fix syntax, geometry,
 IME behavior, or performance.
 
 Keep native editing as the starting point. Do not create a custom undo stack to
@@ -180,9 +183,11 @@ measured engine proposal back for approval. A parser alone cannot fix history.
 **Exit gate:** faithful source, aligned paint, predictable native typing/action
 undo within the approved document-history policy, and tested integration/lifecycle
 behavior. Independent per-instance history is not an inline-core requirement.
-The whole-editor iframe example must keep editor undo separate from parent fields
-without a new engine or a custom history stack. Document host-callback mutations
-that can split Chromium typing groups; use persistent Text nodes in examples.
+Test native typing/action undo inside the whole-editor iframe without a new
+engine or a custom history stack. Cross-document focus and history routing remain
+browser-owned; retain separate native diagnostics and document known limitations.
+Document host-callback mutations that can split Chromium typing groups; use
+persistent Text nodes in examples.
 
 Establish representative document sizes and agree latency, memory, and bundle
 budgets before making production claims. Do not promise unmeasured limits.
@@ -280,7 +285,7 @@ task nesting and lifting, code-body whitespace edits, protected fence/HTML lines
 and refusal of moves that would change unselected ownership. Escape then Tab/
 Shift+Tab passes one native focus step through the browser. A visible, per-instance
 accessible hint explains it. `tests/markdown-indentation.js` checks source/history
-and native focus in inline and both iframe examples. No new toolbar actions,
+and native focus inline and within the whole-editor iframe. No new toolbar actions,
 options, or custom focus-order implementation are added.
 
 The rule/separator slice hardens `line` with protected selections, safe paragraph
@@ -296,14 +301,14 @@ built-ins, and respects focused-source ownership, composition, AltGr, and preven
 events. Tooltips and `aria-keyshortcuts` expose actual bindings without renaming
 buttons. Native writing keys/history and default toolbar contents stay unchanged.
 `tests/markdown-shortcuts.js` checks configuration, validation, callbacks, guards,
-native history and both iframe arrangements. Package checks cover shipped formats.
+native history and the whole-editor iframe. Package checks cover shipped formats.
 
 The Link/history-state slice protects recognized literal/prefix and existing-link
 boundaries. It permits whole inline-code labels, preserves required body separators,
 and rejects candidates that change surrounding ownership or task/literal source.
 Native Undo/Redo buttons follow browser-reported availability, including document-
 wide input and focus changes. State-only refresh does not render, notify, or steal
-focus. Both iframe layouts retain child-owned flags with native keyboard traversal.
+focus. The whole-editor iframe retains child-owned flags and keyboard traversal.
 `tests/markdown-state.js` covers these guards, native history states, custom overrides,
 and block/LF/BR shapes; package checks cover the shipped formats.
 
@@ -347,7 +352,7 @@ file strategy, API method, or default shortcut is added. At the user's request,
 Image now appears beside Link in the default toolbar. Explicit action lists still
 control which buttons appear.
 `tests/markdown-images.js` covers source shapes, callbacks/history, guards, custom
-and keyboard-only paths, no requests, and both iframe layouts. See
+and keyboard-only paths, no requests, and the whole-editor iframe. See
 [command behavior](../markdown-commands.md) for URL and selection rules.
 
 Inside a recognized inline image, Image now selects its source URL for native
@@ -376,15 +381,18 @@ composition, document replacement, and teardown must not insert at a stale point
 or produce late callbacks. Do not save temporary object URLs as durable Markdown
 without an explicit application policy; release owned resources.
 
-The approved table-size picker replaces the initial fixed template. The default
-`table` action opens a 10 × 8 grid plus Columns/Rows fields (default 3 × 3) and
-Insert. Rows include the header, not the delimiter. One row is header-only.
+The default `table` action opens a Table menu with insertion, source formatting,
+row/column editing, and alignment. Individual commands remain configurable as
+buttons or keyboard-only actions. `table-insert` opens a 10 × 8 grid plus
+Columns/Rows fields (default 3 × 3) and Insert. New tables start padded, including
+the delimiter and empty cells, as part of one native insertion. Rows include the
+header, not the delimiter. One row is header-only.
 Creation bounds are 100 columns, 1,000 rows and 10,000 cells; no new configuration
 or public insertion method is added. Arrow keys move through the grid; Enter/
 Space inserts; Escape/outside click cancels. The picker saves the empty-body caret
-and refuses stale positions. It reuses existing shared picker CSS; HTML code and
-all CSS remain unchanged. UI belongs to the toolbar's document while native
-source editing/history stays in the child when the toolbar is ported.
+and refuses stale positions. It reuses shared picker CSS without HTML-editor
+JavaScript. UI, source editing, and native history stay in the
+same editing document.
 
 Insertion still requires a collapsed caret on an empty body line and selects
 `Column 1`. It adds no default shortcut, text conversion, or document grid.
@@ -394,21 +402,21 @@ stale positions, cancellations and unsafe placements add no edit/history or
 callback. Confirmed insertion uses one native undo step and one `onChange`.
 Browser checks cover default/grid/manual/header-only/limit cases, block/LF/BR
 source, save/reload, callback/history/guard/composition/custom/keyboard-only paths,
-geometry, fallback, no requests, teardown and both iframe layouts. Package smoke
+geometry, no requests, teardown and the whole-editor iframe. Package smoke
 covers grid/manual insertion in all JS formats.
 
-The row-editing slice adds configurable `table-row-after` and `table-row-delete`
-without changing defaults. Add matches the table's column count and inserts below
+The Table menu includes `table-row-after` and `table-row-delete`, also available
+as individual actions. Add matches the table's column count and inserts below
 the current row (first body row from the header/delimiter). Delete protects the
 header/delimiter and leaves a valid header-only table after the last body row.
 Single-row selections work; multirow selections are refused. Candidate checks
 preserve untouched cells, table identity, containers, and neighboring block/task
 state. Each edit is one native undo step and one `onChange`. Carets stay useful
 for continued source editing. Browser/package coverage includes native deletion
-boundaries, callbacks/history, custom/keyboard-only paths, and both iframe layouts.
+boundaries, callbacks/history, custom/keyboard-only paths, and the whole-editor iframe.
 
-The column slice adds optional `table-column-after` and `table-column-delete`,
-with no default toolbar/shortcut changes. A caret or selection in one header/body
+The Table menu includes `table-column-after` and `table-column-delete`, also
+available as individual actions without default shortcuts. A caret or selection in one header/body
 cell targets a whole-table edit. Add inserts selected `Column` header text, an
 unaligned delimiter and empty body cells. Delete protects the final column and
 keeps a caret in the same row's next/previous cell. Header-only tables work;
@@ -418,18 +426,30 @@ empty edges and one-column tables valid. Candidate checks preserve table identit
 row counts, retained cells, containers, and neighboring block/task state. Each
 edit is one native undo step and one `onChange`. Browser/package coverage includes
 all three source shapes, guards, callbacks/history, custom/keyboard-only paths,
-and both iframe layouts.
+and the whole-editor iframe.
 
-The alignment slice adds optional `table-align-left`, `table-align-center`,
-`table-align-right` and `table-align-none`, with defaults unchanged. It shares
+The Table menu includes `table-align-left`, `table-align-center`,
+`table-align-right` and `table-align-none`, also available as individual actions. It shares
 column-cell eligibility and changes only the target delimiter's colons. Dash
 count, whitespace and all other source stay intact. The original caret/selected
 range maps through the edit. Pressed state reflects recognized alignment;
 reapplying it changes no source/history and sends no callback. Unsafe candidates
 are refused rather than normalizing markers. Actual edits remain one native undo
 step and one `onChange`. Browser/package checks cover all four modes, no-ops,
-state/selection, callbacks/history, containers/literals and both iframe layouts.
-This sets GFM markers, not visual source padding or a DOM table grid.
+state/selection, callbacks/history, containers/literals and the whole-editor iframe.
+These actions set GFM markers, not source padding or a DOM table grid.
+
+The approved `table-format` action appears in the default Table menu. It pads the
+current recognized, non-ragged table for monospace source, standardizes outer
+pipes, and adjusts delimiter dashes while preserving alignment colons and cell
+content. It supports a caret or selection within one table, including its
+delimiter. Container prefixes and unrelated source stay intact. No font measurement,
+proportional-font support, automatic typing-time formatting, or custom history is
+added. Formatting is one native edit and one callback; identical output adds
+neither edits nor history. New table insertion generates this layout directly.
+Wide/combining glyphs are outside the simple source-column width model. Tests
+cover source shapes, selection, no-ops, callbacks/history, guards, menu keyboard
+use, narrow layout, and whole-editor iframe split view.
 
 **Future nice-to-have — advanced tables.** Text-to-table conversion and other
 advanced table operations are deferred, not required for M4. There is no arbitrary
@@ -447,20 +467,22 @@ Deferred image-file and advanced-table workflows do not block completion.
 
 ### M5 — Add optional view modes and local help
 
-Approved and implemented first slices: `guide` is a default local quick-start
-modal after Redo; `preview` appears before Help when `preview: { render }` is
-configured. The application owns the renderer chain. It returns HTML synchronously
-or through a Promise; core imports no parser/highlighter. Explicit built-in Preview
+Implemented controls: `guide` opens a default local quick-start modal after
+Fullscreen. With `preview: { render }` configured, the default toolbar adds
+Preview and Side-by-side before Fullscreen and Help. The application owns the
+renderer chain. It returns HTML synchronously or through a Promise; core imports
+no parser/highlighter. Explicit built-in Preview
 without a renderer fails initialization. Preview filters returned HTML, replaces
 images/task inputs with inert text, preserves safe highlighting classes, and
 ignores stale async results. Applications disable raw HTML in the renderer.
-MeltDown is the dogfooded renderer; Marked is not a dependency. highlight.js is
-a dev-only integration dependency for MeltDown's optional `highlight` hook.
+MeltDown is the dogfooded renderer; poliSH supplies code highlighting through
+its optional `highlight` hook. Neither library is imported by the editor core.
+No third-party parser or highlighter dependency is needed.
 Browser tests bundle their adapter in memory; no third-party code or test bundle
 is shipped.
 The MaiDEn demo now supplies the separately shipped, optional
 `ligHTMetaL::MeltDown` parser through the same hook. Its source, three builds,
-[guide](../MeltDown.md), 186 parser tests, and browser integration tests live here.
+[guide](../MeltDown.md), parser tests, and browser integration tests live here.
 Core still imports no parser. Table-cell styles remain filtered; no alignment
 exception was added. Fullscreen is implemented as a fixed viewport layout with
 Escape/button exit, source/preview support, owned page-scroll locking and teardown
@@ -469,8 +491,9 @@ Side-by-side is implemented through the same renderer: live editable source and
 filtered output, bidirectional proportional vertical scrolling, responsive stacking and fullscreen
 integration. Source/preview/split transitions preserve native source DOM/history.
 Preview rendering reuses DOM nodes and hides spares to avoid splitting Chromium
-native typing groups. Async guards apply to both rendered views. Broader final
-M5 accessibility/security review remains separate from feature implementation.
+native typing groups. Async guards apply to both rendered views. The
+[security review](../security-review.md) covers the rendering boundaries and
+remaining risks. Broader M5 accessibility review remains open.
 
 Preview, side-by-side, fullscreen, and guide are required for complete button
 coverage. They need not be enabled or loaded in the default source-only editor.
@@ -502,9 +525,10 @@ source editor's content-callback contract.
 ### M6 — Harden integration, accessibility, and performance
 
 Preserve `init({ element, actions, onChange, classes })`, content methods, and
-lifecycle behavior. Proposed additions include placeholder, read-only state,
-accessible labels, configurable shortcuts, and focus/view callbacks. Review names
-and semantics before adding them; do not copy every reference setting.
+lifecycle behavior. Per-editor configurable shortcuts are implemented. Proposed
+additions include placeholder, read-only state, accessible labels, and focus/view
+callbacks. Review names and semantics before adding them; do not copy every
+reference setting.
 
 Read-only blocks user edits, not application-driven document loading. Define
 focus/selection behavior after replacement and view changes. Keep `onChange` tied
@@ -591,9 +615,16 @@ native command states. Clean Block is omitted, not unfinished work. M4 is comple
 for the agreed scope: image templates, inline-image URL selection, table-size
 picking, and row/column/alignment editing. Shared reference-image editing, image
 file workflows, and advanced table conversion remain future nice-to-haves, not
-M4 blockers. Keep reference images protected. Next: agree M5 preview, views, and
-local-help behavior before implementation. Toolbar-default, dependency, renderer,
-and configuration decisions still need review.
+M4 blockers. Keep reference images protected. M5 Help, Preview, Side-by-side, and
+Fullscreen are implemented, including the optional MeltDown/poliSH rendering chain.
+The supported-scope regression suite and package checks pass in Chromium/Firefox.
+Next: complete M5 accessibility review, then proceed with M6 integration,
+accessibility, and performance hardening.
+[The security report](../security-review.md#firefox-runtime-diagnosis) records the
+separate native cross-document runtime limitations. The
+report also records the completed rendering-boundary security checks and their
+limits. Agree performance budgets and any new API, toolbar-default, dependency,
+or configuration changes before implementation.
 
 Preserve the synchronous API, native editing/history, and application-owned iframe
 examples. Remaining M1 manual input/accessibility checks and broader performance

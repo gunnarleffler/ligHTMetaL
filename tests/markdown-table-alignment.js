@@ -159,28 +159,18 @@ async function tableAlignmentChecks(browser, base, name) {
     await page.evaluate(() => { window.__deadAlign = __markdownEditor.content; __markdownEditor.destroy(); });
     assert.equal(await page.evaluate(() => __deadAlign.dispatchEvent(new KeyboardEvent("keydown", { key: "C", altKey: true, shiftKey: true, bubbles: true, cancelable: true }))), true);
     monitor = false;
-    for (const mode of ["whole", "surface"]) {
-      await page.goto(base + (mode === "whole" ? "/examples/markdown-iframe.html" : "/examples/markdown.html?mode=isolated"));
-      if (mode === "whole") {
-        await page.waitForFunction(() => !document.getElementById("read-markdown").disabled);
-        await page.frameLocator("#isolated-editor").locator(".lightmarkdown-input").evaluate((node, text) => {
-          const win = node.ownerDocument.defaultView, host = node.closest(".lightmarkdown"); win.__markdownEditor.destroy(); win.__alignmentChanges = 0;
-          win.__markdownEditor = win.maiden.init({ element: host,
-            actions: ["table-align-left", "table-align-center", "table-align-right", "table-align-none", "undo", "redo"], onChange: () => win.__alignmentChanges++ });
-          win.__markdownEditor.setMarkdown(text); win.__alignmentChanges = 0;
-        }, table);
-      } else {
-        await page.waitForFunction(() => window.__markdownEditor && __markdownMode === "isolated");
-        await page.evaluate(async text => {
-          __markdownEditor.destroy(); window.__alignmentChanges = 0;
-          window.__markdownEditor = await __initMarkdownSurface({ element: document.getElementById("markdown-editor"),
-            actions: ["table-align-left", "table-align-center", "table-align-right", "table-align-none", "undo", "redo"], onChange: () => __alignmentChanges++ });
-          __markdownEditor.setMarkdown(text); window.__alignmentChanges = 0;
-        }, table);
-      }
-      const view = page.frameLocator(mode === "whole" ? "#isolated-editor" : ".lightmarkdown-surface-frame");
-      const input = view.locator(".lightmarkdown-input"), toolbar = (mode === "whole" ? view : page).getByRole("group", { name: "Markdown formatting" });
-      const read = () => mode === "whole" ? input.evaluate(node => node.ownerDocument.defaultView.__markdownEditor.getMarkdown()) : page.evaluate(() => __markdownEditor.getMarkdown());
+    {
+      await page.goto(base + "/examples/markdown-iframe.html");
+      await page.waitForFunction(() => !document.getElementById("read-markdown").disabled);
+      const view = page.frameLocator("#isolated-editor");
+      const input = view.locator(".lightmarkdown-input"), toolbar = view.getByRole("group", { name: "Markdown formatting" });
+      await input.evaluate((node, text) => {
+        const win = node.ownerDocument.defaultView, host = node.closest(".lightmarkdown"); win.__markdownEditor.destroy(); win.__alignmentChanges = 0;
+        win.__markdownEditor = win.maiden.init({ element: host,
+          actions: ["table-align-left", "table-align-center", "table-align-right", "table-align-none", "undo", "redo"], onChange: () => win.__alignmentChanges++ });
+        win.__markdownEditor.setMarkdown(text); win.__alignmentChanges = 0;
+      }, table);
+      const read = () => input.evaluate(node => node.ownerDocument.defaultView.__markdownEditor.getMarkdown());
       await input.evaluate(node => {
         const doc = node.ownerDocument, range = doc.createRange(); range.setStart(node.children[2].firstChild, 2); range.setEnd(node.children[2].firstChild, 5);
         node.focus(); doc.getSelection().removeAllRanges(); doc.getSelection().addRange(range); node.dispatchEvent(new Event("focus"));
@@ -190,12 +180,12 @@ async function tableAlignmentChecks(browser, base, name) {
       assert.equal(await center.getAttribute("aria-pressed"), "true");
       await toolbar.getByRole("button", { name: "Align Column Right", exact: true }).click(); assert.equal(await read(), table.replace("| --- |", "| ---: |"));
       assert.equal(await input.evaluate(node => node.ownerDocument.getSelection().toString()), "one");
-      assert.equal(mode === "whole" ? await input.evaluate(node => node.ownerDocument.defaultView.__alignmentChanges) : await page.evaluate(() => __alignmentChanges), 2);
+      assert.equal(await input.evaluate(node => node.ownerDocument.defaultView.__alignmentChanges), 2);
       await page.keyboard.press("Control+z"); assert.equal(await read(), table.replace("| --- |", "| :---: |"));
       await page.keyboard.press("Control+z"); assert.equal(await read(), table); monitor = false;
     }
     assert.deepEqual(errors, []); assert.deepEqual(requests, []);
-    console.log(`${name}: table alignment transitions/pressed state, no-ops, exact markers/padding, mapped selection, native history, containers/guards, custom/keyboard-only/teardown and both iframe layouts: ok`);
+    console.log(`${name}: table alignment transitions/pressed state, no-ops, exact markers/padding, mapped selection, native history, containers/guards, custom/keyboard-only/teardown and whole-editor iframe: ok`);
   } finally { await page.close(); }
 }
 module.exports = { tableAlignmentChecks };

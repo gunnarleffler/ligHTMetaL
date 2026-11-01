@@ -2,49 +2,18 @@
  * Load after lightmetal.css. Add lightmetal-patina to the editor host.
  */
 .lightmetal.lightmetal-patina {
-  --lightmetal-bg: #ffffff;
-  --lightmetal-bg-toolbar: #f6f7f9;
-  --lightmetal-border: #c7cdd4;
-  --lightmetal-color: #243447;
-  --lightmetal-color-dim: #536172;
-  --lightmetal-hover: #e4ebf2;
-  --lightmetal-accent: #1465b8;
-  --lightmetal-accent-soft: #e2effc;
-  --lightmetal-error-fg: #b42318;
-  --lightmetal-error-bg: #fdecea;
-  color-scheme: light;
+  --lightmetal-bg: light-dark(#ffffff, #202d3a);
+  --lightmetal-bg-toolbar: light-dark(#f6f7f9, #273746);
+  --lightmetal-border: light-dark(#c7cdd4, #5d6c7b);
+  --lightmetal-color: light-dark(#243447, #f0f4f8);
+  --lightmetal-color-dim: light-dark(#536172, #c0cad4);
+  --lightmetal-hover: light-dark(#e4ebf2, #374a5d);
+  --lightmetal-accent: light-dark(#1465b8, #a3cfff);
+  --lightmetal-accent-soft: light-dark(#e2effc, #334f6c);
+  --lightmetal-error-fg: light-dark(#b42318, #ffb4ad);
+  --lightmetal-error-bg: light-dark(#fdecea, #532924);
   font-family: system-ui, sans-serif;
   border-radius: 5px;
-}
-
-.lightmetal.lightmetal-patina.lightmetal-dark {
-  --lightmetal-bg: #202d3a;
-  --lightmetal-bg-toolbar: #273746;
-  --lightmetal-border: #5d6c7b;
-  --lightmetal-color: #f0f4f8;
-  --lightmetal-color-dim: #c0cad4;
-  --lightmetal-hover: #374a5d;
-  --lightmetal-accent: #a3cfff;
-  --lightmetal-accent-soft: #334f6c;
-  --lightmetal-error-fg: #ffb4ad;
-  --lightmetal-error-bg: #532924;
-  color-scheme: dark;
-}
-
-@media (prefers-color-scheme: dark) {
-  .lightmetal.lightmetal-patina:not(.lightmetal-light) {
-    --lightmetal-bg: #202d3a;
-    --lightmetal-bg-toolbar: #273746;
-    --lightmetal-border: #5d6c7b;
-    --lightmetal-color: #f0f4f8;
-    --lightmetal-color-dim: #c0cad4;
-    --lightmetal-hover: #374a5d;
-    --lightmetal-accent: #a3cfff;
-    --lightmetal-accent-soft: #334f6c;
-    --lightmetal-error-fg: #ffb4ad;
-    --lightmetal-error-bg: #532924;
-    color-scheme: dark;
-  }
 }
 
 .lightmetal-patina .lightmetal-actionbar {

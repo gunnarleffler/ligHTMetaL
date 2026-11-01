@@ -1309,8 +1309,10 @@ function tablePlan(text, start, syntax, part, rowCount, columnCount) {
   // Keep the blank boundary that ends a preceding table or raw HTML block.
   const previous = syntax[part.index - 1];
   const before = previous?.table || previous?.html ? "\n" + prefix : "";
-  const rows = ["| " + Array.from({ length: columnCount }, (_, index) => "Column " + (index + 1)).join(" | ") + " |",
-    "| " + Array(columnCount).fill("---").join(" | ") + " |", ...Array(rowCount - 1).fill("|" + "  |".repeat(columnCount))];
+  const headers = Array.from({ length: columnCount }, (_, index) => "Column " + (index + 1));
+  const row = cells => "| " + cells.join(" | ") + " |";
+  const rows = [row(headers), row(headers.map(header => "-".repeat(header.length))),
+    ...Array(rowCount - 1).fill(row(headers.map(header => " ".repeat(header.length))))];
   const value = separator + before + rows.join("\n" + prefix) + (part.index < syntax.length - 1 ? "\n" + prefix : "");
   const candidate = markdownTokens(text.slice(0, start) + value + text.slice(start));
   const delta = value.split("\n").length - 1;
@@ -1435,6 +1437,79 @@ function tableColumnPlan(text, syntax, selection, remove) {
   })) return null;
   const target = remove ? candidate[part.index].regions[Math.min(column, count - 1)] : nextBlock.header.regions[column + 1];
   return { ...plan, anchor: target.start, focus: remove ? target.start : target.end };
+}
+
+function tableFormatSelection(text, start, end, syntax) {
+  const first = syntax[text.slice(0, start).split("\n").length - 1];
+  const last = syntax[text.slice(0, Math.max(start, end - 1)).split("\n").length - 1];
+  return !first.protected && first.tableBlock && !first.tableBlock.ragged &&
+    first.tableBlock === last.tableBlock && start >= first.sourceStart + first.bodyStart ? first.tableBlock : null;
+}
+
+// Count source columns in a monospace font, with four-column tab stops.
+function tableSourceWidth(value, start = 0) {
+  let column = start;
+  for (const char of value) column += char === "\t" ? 4 - column % 4 : 1;
+  return column - start;
+}
+
+function tableFormatPlan(text, start, end, syntax, block) {
+  const raw = text.split("\n"), changes = [], widths = [];
+  const rows = [block.header, block.delimiter, ...block.rows].map(part => ({ part,
+    offset: tableSourceWidth(raw[part.index].slice(0, part.bodyStart)) + 2,
+    cells: part.tableCells.map(cell => {
+      const [a, b] = tableCellSource(part, cell), value = text.slice(a, b);
+      const start = a + /^[ \t]*/.exec(value)[0].length;
+      const end = Math.max(start, b - /[ \t]*$/.exec(value)[0].length);
+      return { start, end, value: text.slice(start, end) };
+    })
+  }));
+  for (let column = 0; column < block.header.table; column++) {
+    const marker = rows[1].cells[column].value;
+    const left = marker.startsWith(":"), right = marker.endsWith(":");
+    let width = 3 + Number(left) + Number(right);
+    for (const row of rows) if (!row.part.tableDelimiter) width = Math.max(width, tableSourceWidth(row.cells[column].value, row.offset));
+    widths.push(width);
+    rows[1].cells[column].value = (left ? ":" : "") + "-".repeat(width - Number(left) - Number(right)) + (right ? ":" : "");
+    for (const row of rows) row.offset += width + 3;
+  }
+  const change = (start, end, value, before = false) => {
+    if (text.slice(start, end) !== value) changes.push({ start, end, value, before });
+  };
+  for (const row of rows) {
+    const { part, cells } = row;
+    let cursor = part.sourceStart + part.bodyStart, offset = tableSourceWidth(raw[part.index].slice(0, part.bodyStart)) + 2, padding = 0;
+    for (const [column, cell] of cells.entries()) {
+      change(cursor, cell.start, column ? " ".repeat(padding) + " | " : "| ", column > 0);
+      if (part.tableDelimiter) change(cell.start, cell.end, cell.value);
+      padding = widths[column] - tableSourceWidth(cell.value, offset);
+      cursor = cell.end; offset += widths[column] + 3;
+    }
+    change(cursor, part.sourceStart + raw[part.index].length, " ".repeat(padding) + " |", true);
+  }
+  if (!changes.length) return { unchanged: true };
+  const plan = sourceEditPlan(text, changes, start, end);
+  const value = text.slice(0, plan.start) + plan.value + text.slice(plan.end);
+  if (value === text) return { unchanged: true };
+  const candidate = markdownTokens(value);
+  const expected = new Map(rows.map(row => [row.part.index, row.cells.map(cell => cell.value)]));
+  const sameOwner = (oldNode, newNode) => {
+    for (; oldNode && newNode; oldNode = oldNode.parent, newNode = newNode.parent) {
+      if (oldNode.quote !== newNode.quote || oldNode.marker !== newNode.marker || oldNode.width !== newNode.width || oldNode.first !== newNode.first) return false;
+    }
+    return !oldNode && !newNode;
+  };
+  if (syntax.some((old, index) => {
+    const next = candidate[index], cells = expected.get(index);
+    return !sameOwner(old.structure, next.structure) || old.level !== next.level || old.table !== next.table ||
+      old.tableBlock?.header.index !== next.tableBlock?.header.index || !!old.tableBlock?.ragged !== !!next.tableBlock?.ragged ||
+      !!old.tableDelimiter !== !!next.tableDelimiter || !!old.html !== !!next.html || !!old.fence !== !!next.fence ||
+      !!old.indentedCode !== !!next.indentedCode || !!old.protected !== !!next.protected ||
+      !!old.setext !== !!next.setext || !!old.thematic !== !!next.thematic || old.taskMarker?.checked !== next.taskMarker?.checked ||
+      cells && (next.tableCells.length !== cells.length || next.tableCells.some((cell, column) =>
+        value.slice(...tableCellSource(next, cell)).replace(/^[ \t]+|[ \t]+$/g, "") !== cells[column]));
+  })) return null;
+  return plan;
 }
 
 const tableAlignments = { "table-align-left": "left", "table-align-center": "center", "table-align-right": "right", "table-align-none": "none" };
@@ -1716,11 +1791,14 @@ function createPainter() {
         pool.push(span);
         target.append(span);
       }
-      pool[i].hidden = false;
-      pool[i].className = tokens[i].className;
-      pool[i].firstChild.data = tokens[i].text;
+      if (pool[i].hidden) pool[i].hidden = false;
+      if (pool[i].className !== tokens[i].className) pool[i].className = tokens[i].className;
+      if (pool[i].firstChild.data !== tokens[i].text) pool[i].firstChild.data = tokens[i].text;
     }
-    for (let i = tokens.length; i < pool.length; i++) { pool[i].hidden = true; pool[i].firstChild.data = ""; }
+    for (let i = tokens.length; i < pool.length; i++) {
+      if (!pool[i].hidden) pool[i].hidden = true;
+      if (pool[i].firstChild.data !== "") pool[i].firstChild.data = "";
+    }
     return pool;
   }
   function paintBlock(source, target, context) {
@@ -1834,6 +1912,7 @@ const titles = {
   "side-by-side": "Side-by-side", fullscreen: "Fullscreen", preview: "Preview", guide: "Help", bold: "Bold", italic: "Italic", strikethrough: "Strike-through", paragraph: "Paragraph",
   quote: "Quote", olist: "Ordered List", ulist: "Unordered List", code: "Inline Code",
   checklist: "Task List", "task-toggle": "Toggle Task",
+  "table-insert": "Insert Table…", "table-format": "Format Table",
   "table-row-after": "Add Row After", "table-row-delete": "Delete Row",
   "table-column-after": "Add Column After", "table-column-delete": "Delete Column",
   "table-align-left": "Align Column Left", "table-align-center": "Center Column",
@@ -1852,6 +1931,8 @@ paths.guide = '<circle cx="12" cy="12" r="9"/><path d="M9 9a3 3 0 0 1 6 0c0 2-3 
 paths.codeblock = '<path fill="currentColor" stroke="none" d="M6.25 3C4.45507 3 3 4.45507 3 6.25V17.75C3 19.5449 4.45507 21 6.25 21H17.75C19.5449 21 21 19.5449 21 17.75V6.25C21 4.45507 19.5449 3 17.75 3H6.25ZM4.5 6.25C4.5 5.2835 5.2835 4.5 6.25 4.5H17.75C18.7165 4.5 19.5 5.2835 19.5 6.25V17.75C19.5 18.7165 18.7165 19.5 17.75 19.5H6.25C5.2835 19.5 4.5 18.7165 4.5 17.75V6.25ZM10.5303 9.28033C10.8232 8.98744 10.8232 8.51256 10.5303 8.21967C10.2374 7.92678 9.76256 7.92678 9.46967 8.21967L6.21967 11.4697C5.92678 11.7626 5.92678 12.2374 6.21967 12.5303L9.46967 15.7803C9.76256 16.0732 10.2374 16.0732 10.5303 15.7803C10.8232 15.4874 10.8232 15.0126 10.5303 14.7197L7.81066 12L10.5303 9.28033ZM14.5303 8.21967C14.2374 7.92678 13.7626 7.92678 13.4697 8.21967C13.1768 8.51256 13.1768 8.98744 13.4697 9.28033L16.1893 12L13.4697 14.7197C13.1768 15.0126 13.1768 15.4874 13.4697 15.7803C13.7626 16.0732 14.2374 16.0732 14.5303 15.7803L17.7803 12.5303C18.0732 12.2374 18.0732 11.7626 17.7803 11.4697L14.5303 8.21967Z"/>';
 paths.checklist = '<rect x="3" y="4" width="6" height="6" rx="1"/><path d="m4 7 1 1 3-3M13 7h8M13 17h8"/><rect x="3" y="14" width="6" height="6" rx="1"/>';
 paths["task-toggle"] = '<path d="m5 12 4 4L19 6"/>';
+paths["table-insert"] = paths.table;
+paths["table-format"] = '<rect x="3" y="4" width="18" height="16" rx="1"/><path d="M3 9h18M9 4v16M15 4v16m-9-7v4m6-4v4m6-4v4"/>';
 paths["table-row-after"] = '<path d="M3 4h18v10H3zM3 9h18M12 4v10m0 3v6m-3-3h6"/>';
 paths["table-row-delete"] = '<path d="M3 4h18v10H3zM3 9h18M12 4v10m-3 6h6"/>';
 paths["table-column-after"] = '<path d="M3 3h11v18H3zM3 9h11M8 3v18m9-9h6m-3-3v6"/>';
@@ -1868,7 +1949,9 @@ const defaults = ["bold", "italic", "strikethrough", "heading1", "heading2", "pa
 const separator = Symbol("toolbar separator");
 const mounted = new WeakSet();
 const fullscreenOwners = new WeakMap();
-let keyboardHelpId = 0, tablePickerId = 0;
+let keyboardHelpId = 0, tablePickerId = 0, tableMenuId = 0;
+const tableMenuActions = ["table-insert", "table-format", "|", "table-row-after", "table-row-delete",
+  "table-column-after", "table-column-delete", "|", ...Object.keys(tableAlignments)];
 const keyboardHelp = "Tab indents · Shift+Tab unindents · Esc then Tab moves focus";
 const defaultClasses = {
   actionbar: "lightmetal-actionbar", button: "lightmetal-button", content: "lightmetal-content",
@@ -1969,11 +2052,14 @@ export function init(settings = {}) {
   element.classList.add(...ownedClasses);
   const toolbar = document.createElement("div");
   toolbar.className = classes.actionbar;
+  // Scrolling containers can otherwise become automatic browser Tab stops.
+  toolbar.tabIndex = -1;
   toolbar.setAttribute("role", "group");
   toolbar.setAttribute("aria-label", "Markdown formatting");
   toolbar.hidden = actions.length === 0;
   const scroll = document.createElement("div");
   scroll.className = "lightmarkdown-scroll";
+  scroll.tabIndex = -1;
   const stage = document.createElement("div");
   stage.className = "lightmarkdown-stage";
   const paint = document.createElement("div");
@@ -2023,6 +2109,8 @@ export function init(settings = {}) {
   let fullscreen = null;
   const syncedScroll = new WeakMap();
   let guide = null;
+  let tableMenu = null;
+  const tableMenuButtons = [];
   let tablePicker = null, tableSnapshot = null, tableObserver = null, tableMessage, tableColumns, tableRows;
   let lastNotified = "";
   let finalText = "";
@@ -2125,7 +2213,7 @@ export function init(settings = {}) {
   }
   function replace(start, end, text, anchor = start + text.length, focus = anchor) {
     if (destroyed || composing) return false;
-    closeTablePicker(); emptyFormat = null; resetKeyboardHint();
+    closeTableUI(); emptyFormat = null; resetKeyboardHint();
     return edit(() => {
       content.focus();
       const includeBR = select(start, end, true);
@@ -2467,6 +2555,84 @@ export function init(settings = {}) {
     }
     return replace(start, end, plan.value, plan.caret);
   }
+  function closeTableMenu(focus = false) {
+    if (!tableMenu || tableMenu.hidden) return;
+    if (tableMenu.hasAttribute("popover") && tableMenu.matches(":popover-open")) tableMenu.hidePopover();
+    tableMenu.hidden = true;
+    for (const { button, action } of buttons) if (action.name === "table" && !action.result) button.setAttribute("aria-expanded", "false");
+    if (focus && !destroyed) buttons.find(({ action }) => action.name === "table" && !action.result)?.button.focus();
+  }
+  function closeTableUI() { closeTableMenu(); closeTablePicker(); }
+  function positionTablePopup(popup, trigger) {
+    if (!popup || popup.hidden) return;
+    const view = document.defaultView;
+    popup.style.maxWidth = Math.max(0, view.innerWidth - 16) + "px";
+    popup.style.maxHeight = Math.max(0, view.innerHeight - 16) + "px";
+    const anchor = (trigger || toolbar).getBoundingClientRect(), rect = popup.getBoundingClientRect();
+    popup.style.left = Math.max(8, Math.min(anchor.left, view.innerWidth - rect.width - 8)) + "px";
+    const below = anchor.bottom + 4;
+    popup.style.top = (below + rect.height <= view.innerHeight - 8 ? below : Math.max(8, Math.min(anchor.top - rect.height - 4, view.innerHeight - rect.height - 8))) + "px";
+  }
+  function positionTableMenu() {
+    positionTablePopup(tableMenu, buttons.find(({ action }) => action.name === "table" && !action.result)?.button);
+  }
+  function createTableMenu() {
+    tableMenu = document.createElement("div");
+    tableMenu.className = "lightmetal-table-dropdown lightmetal-table-menu lightmarkdown-table-menu";
+    do { tableMenu.id = "lightmarkdown-table-menu-" + ++tableMenuId; } while (document.getElementById(tableMenu.id));
+    tableMenu.setAttribute("role", "menu"); tableMenu.setAttribute("aria-label", "Table"); tableMenu.tabIndex = -1; tableMenu.hidden = true;
+    if (typeof tableMenu.showPopover === "function") tableMenu.setAttribute("popover", "manual");
+    for (const name of tableMenuActions) {
+      if (name === "|") {
+        const divider = document.createElement("div"); divider.setAttribute("role", "separator"); tableMenu.append(divider); continue;
+      }
+      const button = document.createElement("button"), action = { name };
+      button.type = "button"; button.tabIndex = -1; button.textContent = titles[name];
+      if (name === "table-insert") { button.setAttribute("aria-haspopup", "dialog"); button.setAttribute("aria-expanded", "false"); }
+      button.setAttribute("role", Object.prototype.hasOwnProperty.call(tableAlignments, name) ? "menuitemradio" : "menuitem");
+      listen(button, "mousedown", event => event.preventDefault()); listen(button, "click", () => invoke(action));
+      tableMenu.append(button); tableMenuButtons.push({ button, action });
+    }
+    element.append(tableMenu);
+    for (const { button, action } of buttons) if (action.name === "table" && !action.result) button.setAttribute("aria-controls", tableMenu.id);
+    listen(tableMenu, "keydown", event => {
+      if (event.isComposing || event.ctrlKey || event.metaKey || event.altKey) return;
+      if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); closeTableMenu(true); }
+      else if (event.key === "Tab") closeTableMenu(true);
+      else if (["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) {
+        event.preventDefault();
+        const enabled = tableMenuButtons.map(entry => entry.button).filter(button => !button.disabled), index = enabled.indexOf(document.activeElement);
+        const next = event.key === "Home" ? 0 : event.key === "End" ? enabled.length - 1 :
+          (index + (event.key === "ArrowDown" ? 1 : -1) + enabled.length) % enabled.length;
+        enabled[next]?.focus();
+      }
+    });
+    listen(document, "pointerdown", event => {
+      if (!tableMenu.hidden && !tableMenu.contains(event.target) && !buttons.some(({ button, action }) => action.name === "table" && button.contains(event.target))) closeTableMenu();
+    });
+    listen(document, "focusin", event => {
+      if (!tableMenu.hidden && !tableMenu.contains(event.target) && !toolbar.contains(event.target)) closeTableMenu();
+    });
+    listen(document.defaultView, "resize", positionTableMenu);
+    document.addEventListener("scroll", positionTableMenu, true); cleanups.push(() => document.removeEventListener("scroll", positionTableMenu, true));
+  }
+  function toggleTableMenu(last = false) {
+    return edit(() => {
+      if (tableMenu && !tableMenu.hidden) { closeTableMenu(true); return false; }
+      closeTablePicker();
+      if (!selected() || destroyed || composing) return false;
+      if (!tableMenu) createTableMenu();
+      updateButtons();
+      if (destroyed) return false;
+      tableMenu.hidden = false;
+      if (tableMenu.hasAttribute("popover")) tableMenu.showPopover();
+      positionTableMenu();
+      for (const { button, action } of buttons) if (action.name === "table" && !action.result) button.setAttribute("aria-expanded", "true");
+      const enabled = tableMenuButtons.filter(entry => !entry.button.disabled);
+      (enabled[last ? enabled.length - 1 : 0]?.button || tableMenu).focus();
+      return true;
+    });
+  }
   function closeTablePicker(focus = false) {
     tableSnapshot = null;
     tableObserver?.disconnect(); tableObserver = null;
@@ -2474,9 +2640,9 @@ export function init(settings = {}) {
       if (tablePicker.hasAttribute("popover") && tablePicker.matches(":popover-open")) tablePicker.hidePopover();
       tablePicker.hidden = true;
     }
-    for (const { button, action } of buttons) if (action.name === "table" && !action.result) button.setAttribute("aria-expanded", "false");
+    for (const { button, action } of [...buttons, ...tableMenuButtons]) if (action.name === "table-insert" && !action.result) button.setAttribute("aria-expanded", "false");
     if (focus && !destroyed) {
-      const trigger = buttons.find(({ action }) => action.name === "table" && !action.result)?.button;
+      const trigger = buttons.find(({ action }) => ["table", "table-insert"].includes(action.name) && !action.result)?.button;
       if (trigger) trigger.focus(); else restore();
     }
   }
@@ -2510,28 +2676,18 @@ export function init(settings = {}) {
     });
   }
   function positionTablePicker() {
-    if (!tablePicker || tablePicker.hidden) return;
-    const view = tablePicker.ownerDocument.defaultView;
-    tablePicker.style.maxWidth = Math.max(0, view.innerWidth - 16) + "px";
-    tablePicker.style.maxHeight = Math.max(0, view.innerHeight - 16) + "px";
-    const trigger = buttons.find(({ action }) => action.name === "table" && !action.result)?.button;
-    const anchor = (trigger || toolbar.parentElement).getBoundingClientRect(), popup = tablePicker.getBoundingClientRect();
-    tablePicker.style.left = Math.max(8, Math.min(anchor.left, view.innerWidth - popup.width - 8)) + "px";
-    const below = anchor.bottom + 4;
-    tablePicker.style.top = (below + popup.height <= view.innerHeight - 8 ? below : Math.max(8, Math.min(anchor.top - popup.height - 4, view.innerHeight - popup.height - 8))) + "px";
+    const trigger = buttons.find(({ action }) => ["table-insert", "table"].includes(action.name) && !action.result)?.button;
+    positionTablePopup(tablePicker, trigger);
   }
   function createTablePicker() {
-    // The demo adapter may port the toolbar to a parent document. Keep the UI
-    // there, but source ranges, native insertion and history in the editing doc.
-    const ui = toolbar.ownerDocument;
-    tablePicker = ui.createElement("div");
+    tablePicker = document.createElement("div");
     tablePicker.className = "lightmetal-table-dropdown lightmarkdown-table-picker";
-    do { tablePicker.id = "lightmarkdown-table-picker-" + ++tablePickerId; } while (ui.getElementById(tablePicker.id));
+    do { tablePicker.id = "lightmarkdown-table-picker-" + ++tablePickerId; } while (document.getElementById(tablePicker.id));
     tablePicker.setAttribute("role", "dialog"); tablePicker.setAttribute("aria-label", "Insert table");
     if (typeof tablePicker.showPopover === "function") tablePicker.setAttribute("popover", "manual");
     tablePicker.hidden = true;
-    const dimensions = ui.createElement("div"); dimensions.className = "lightmetal-table-dimensions"; dimensions.setAttribute("aria-live", "polite");
-    const grid = ui.createElement("div"); grid.className = "lightmetal-table-grid"; grid.style.gridTemplateColumns = "repeat(10, 1fr)";
+    const dimensions = document.createElement("div"); dimensions.className = "lightmetal-table-dimensions"; dimensions.setAttribute("aria-live", "polite");
+    const grid = document.createElement("div"); grid.className = "lightmetal-table-grid"; grid.style.gridTemplateColumns = "repeat(10, 1fr)";
     grid.setAttribute("role", "group"); grid.setAttribute("aria-label", "Select table size");
     const cells = [];
     const highlight = (rows, columns) => {
@@ -2542,7 +2698,7 @@ export function init(settings = {}) {
       }
     };
     for (let row = 1; row <= 8; row++) for (let column = 1; column <= 10; column++) {
-      const cell = ui.createElement("button"); cell.type = "button"; cell.dataset.row = row; cell.dataset.column = column;
+      const cell = document.createElement("button"); cell.type = "button"; cell.dataset.row = row; cell.dataset.column = column;
       cell.setAttribute("aria-label", column + " columns, " + row + " rows");
       listen(cell, "pointerenter", () => highlight(row, column)); listen(cell, "focus", () => highlight(row, column));
       listen(cell, "click", () => confirmTable(row, column));
@@ -2554,36 +2710,35 @@ export function init(settings = {}) {
       });
       cells.push(cell); grid.append(cell);
     }
-    const form = ui.createElement("form"); form.className = "lightmetal-table-form"; form.noValidate = true;
+    const form = document.createElement("form"); form.className = "lightmetal-table-form"; form.noValidate = true;
     const input = (title, max) => {
-      const label = ui.createElement("label"), field = ui.createElement("input"); label.textContent = title;
+      const label = document.createElement("label"), field = document.createElement("input"); label.textContent = title;
       field.type = "number"; field.min = "1"; field.max = String(max); field.step = "1";
       label.append(field); form.append(label); return field;
     };
     tableColumns = input("Columns", 100); tableRows = input("Rows", 1000);
-    const submit = ui.createElement("button"); submit.type = "submit"; submit.textContent = "Insert"; form.append(submit);
+    const submit = document.createElement("button"); submit.type = "submit"; submit.textContent = "Insert"; form.append(submit);
     listen(form, "submit", event => { event.preventDefault(); confirmTable(tableRows.valueAsNumber, tableColumns.valueAsNumber); });
-    const note = ui.createElement("div"); note.id = tablePicker.id + "-rows"; note.textContent = "Rows include the header.";
+    const note = document.createElement("div"); note.id = tablePicker.id + "-rows"; note.textContent = "Rows include the header.";
     tableRows.setAttribute("aria-describedby", note.id); tablePicker.setAttribute("aria-describedby", note.id);
-    tableMessage = ui.createElement("div"); tableMessage.className = "lightmetal-table-message"; tableMessage.setAttribute("role", "status");
+    tableMessage = document.createElement("div"); tableMessage.className = "lightmetal-table-message"; tableMessage.setAttribute("role", "status");
     tablePicker.append(dimensions, grid, form, note, tableMessage); toolbar.parentElement.append(tablePicker);
-    for (const { button, action } of buttons) if (action.name === "table" && !action.result) button.setAttribute("aria-controls", tablePicker.id);
+    for (const { button, action } of [...buttons, ...tableMenuButtons]) if (action.name === "table-insert" && !action.result) {
+      button.setAttribute("aria-haspopup", "dialog"); button.setAttribute("aria-controls", tablePicker.id);
+    }
     const outside = event => {
-      if (!tableSnapshot || tablePicker.contains(event.target) || buttons.some(({ button, action }) => action.name === "table" && !action.result && button.contains(event.target))) return;
+      if (!tableSnapshot || tablePicker.contains(event.target) || tableMenu?.contains(event.target) || buttons.some(({ button, action }) => ["table", "table-insert"].includes(action.name) && !action.result && button.contains(event.target))) return;
       closeTablePicker();
     };
-    for (const doc of new Set([ui, document])) {
-      listen(doc, "pointerdown", outside); listen(doc, "click", outside);
-      listen(doc, "keydown", event => {
-        if (tableSnapshot && event.key === "Escape" && !event.isComposing && !event.ctrlKey && !event.metaKey && !event.altKey) {
-          event.preventDefault(); closeTablePicker(true);
-        }
-      });
-    }
-    listen(ui.defaultView, "resize", positionTablePicker);
+    listen(document, "pointerdown", outside); listen(document, "click", outside);
+    listen(document, "keydown", event => {
+      if (tableSnapshot && event.key === "Escape" && !event.isComposing && !event.ctrlKey && !event.metaKey && !event.altKey) {
+        event.preventDefault(); closeTablePicker(true);
+      }
+    });
+    listen(document.defaultView, "resize", positionTablePicker);
     // Scroll does not bubble. The viewport handler also covers scrolled hosts.
-    const scrollPosition = () => positionTablePicker();
-    ui.addEventListener("scroll", scrollPosition, true); cleanups.push(() => ui.removeEventListener("scroll", scrollPosition, true));
+    document.addEventListener("scroll", positionTablePicker, true); cleanups.push(() => document.removeEventListener("scroll", positionTablePicker, true));
     return { cells, highlight };
   }
   let tableGrid;
@@ -2600,7 +2755,7 @@ export function init(settings = {}) {
     tablePicker.hidden = false;
     if (tablePicker.hasAttribute("popover")) tablePicker.showPopover();
     positionTablePicker();
-    for (const { button, action } of buttons) if (action.name === "table" && !action.result) button.setAttribute("aria-expanded", "true");
+    for (const { button, action } of [...buttons, ...tableMenuButtons]) if (action.name === "table-insert" && !action.result) button.setAttribute("aria-expanded", "true");
     tableGrid.cells[22].focus(); return true;
   }
   function editTableRow(remove) {
@@ -2631,6 +2786,20 @@ export function init(settings = {}) {
     }
     return replace(plan.start, plan.end, plan.value, plan.anchor, plan.focus);
   }
+  function formatTable() {
+    const current = selected();
+    if (!current) return false;
+    const { model, start, end } = current, syntax = markdownTokens(model.text);
+    const block = tableFormatSelection(model.text, start, end, syntax);
+    if (!block) return false;
+    const plan = tableFormatPlan(model.text, start, end, syntax, block);
+    if (!plan) {
+      errorText.data = "This table cannot be formatted without changing surrounding Markdown.";
+      error.hidden = false;
+      return false;
+    }
+    return !plan.unchanged && replace(plan.start, plan.end, plan.value, plan.anchor, plan.focus);
+  }
   function alignTableColumn(mode) {
     const current = selected();
     if (!current) return false;
@@ -2653,7 +2822,8 @@ export function init(settings = {}) {
     if (writingActions.includes(name)) return lines(name);
     if (name === "link" || name === "image") return insertTemplate(name === "image");
     if (name === "line") return horizontalLine();
-    if (name === "table") return insertTable();
+    if (name === "table-insert") return insertTable();
+    if (name === "table-format") return formatTable();
     if (name === "table-row-after" || name === "table-row-delete") return editTableRow(name === "table-row-delete");
     if (name === "table-column-after" || name === "table-column-delete") return editTableColumn(name === "table-column-delete");
     if (Object.prototype.hasOwnProperty.call(tableAlignments, name)) return alignTableColumn(tableAlignments[name]);
@@ -2678,7 +2848,7 @@ export function init(settings = {}) {
   }
   function toggleFullscreen() {
     if (fullscreen) return exitFullscreen();
-    closeTablePicker(); remember(); resetKeyboardHint();
+    closeTableUI(); remember(); resetKeyboardHint();
     fullscreenOwners.get(document)?.(false);
     if (destroyed) return false;
     fullscreen = {
@@ -2729,7 +2899,7 @@ export function init(settings = {}) {
     }).catch(fail);
   }
   function togglePreview(split = false) {
-    closeTablePicker(); remember(); resetKeyboardHint();
+    closeTableUI(); remember(); resetKeyboardHint();
     syncedScroll.delete(scroll); syncedScroll.delete(preview);
     const close = previewing && sideBySide === split;
     if (!previewing || sideBySide) sourceScroll = scroll.scrollTop;
@@ -2745,21 +2915,19 @@ export function init(settings = {}) {
     return true;
   }
   function openGuide() {
-    closeTablePicker(); remember(); resetKeyboardHint();
+    closeTableUI(); remember(); resetKeyboardHint();
     if (!guide) {
-      // The toolbar may live in a parent document while source stays in a frame.
-      const ui = toolbar.ownerDocument;
-      guide = ui.createElement("dialog");
+      guide = document.createElement("dialog");
       guide.className = "lightmarkdown-guide";
       guide.setAttribute("aria-label", "Markdown quick start");
-      const heading = ui.createElement("h2"); heading.textContent = "Markdown quick start"; heading.tabIndex = -1; heading.autofocus = true;
-      const intro = ui.createElement("p"); intro.textContent = "Write plain text. Add these markers, or use the toolbar. Your Markdown stays visible.";
-      const sections = ui.createDocumentFragment();
+      const heading = document.createElement("h2"); heading.textContent = "Markdown quick start"; heading.tabIndex = -1; heading.autofocus = true;
+      const intro = document.createElement("p"); intro.textContent = "Write plain text. Add these markers, or use the toolbar. Your Markdown stays visible.";
+      const sections = document.createDocumentFragment();
       const section = (title, explanation, example) => {
-        const heading = ui.createElement("h3"); heading.textContent = title;
-        const paragraph = ui.createElement("p"); paragraph.textContent = explanation;
+        const heading = document.createElement("h3"); heading.textContent = title;
+        const paragraph = document.createElement("p"); paragraph.textContent = explanation;
         sections.append(heading, paragraph);
-        if (example) { const pre = ui.createElement("pre"); pre.textContent = example; sections.append(pre); }
+        if (example) { const pre = document.createElement("pre"); pre.textContent = example; sections.append(pre); }
       };
       section("TLDR", "Write paragraphs with a blank line between them. Select text and use the toolbar, or type Markdown markers yourself. Preview, when configured, shows the rendered result.", "# A heading\n\nA paragraph with **bold** and *italic* text.");
       section("Emphasis", "Wrap text in matching markers.", "**bold**\n*italic*\n~~strikethrough~~");
@@ -2772,11 +2940,11 @@ export function init(settings = {}) {
       section("Code", "Use backticks for inline code. For a code block, put triple backticks on their own lines. An optional language name can help a configured preview renderer highlight code.", '`inline code`\n\n```javascript\nconst greeting = "Hello";\n```');
       section("Paragraphs and rules", "Leave a blank line between paragraphs. Put --- on a separate line with blank lines around it for a horizontal rule, not a heading underline.", "First paragraph.\n\nSecond paragraph.\n\n---\n\nAfter the rule.");
       section("Literal markers", "Put a backslash before punctuation when you want the marker itself, not formatting.", "\\*literal asterisks\\*");
-      const editing = ui.createElement("p"); editing.textContent = "Link inserts a template with its URL selected. Image inserts a template, uses selected text as its URL, or selects an existing inline image’s URL. Table opens the size picker. Edit image descriptions and table text directly in the source.";
-      const keys = ui.createElement("p"); keys.textContent = "Default shortcuts: Ctrl/Cmd+B bold · Ctrl/Cmd+I italic · Ctrl/Cmd+K link · Ctrl/Cmd+backtick inline code. Tab indents; Shift+Tab unindents. Press Esc, then Tab (or Shift+Tab), to move focus out of the source. Your application may customize shortcuts.";
-      const note = ui.createElement("p"); note.textContent = "This editor follows CommonMark with selected GFM extensions, including tables, tasks, and strike-through. The specification link opens an external site.";
-      const link = ui.createElement("a"); link.textContent = "Read the CommonMark specification"; link.href = "https://spec.commonmark.org/"; link.target = "_blank"; link.rel = "noopener noreferrer";
-      const close = ui.createElement("button"); close.type = "button"; close.textContent = "Close";
+      const editing = document.createElement("p"); editing.textContent = "Link inserts a template with its URL selected. Image inserts a template, uses selected text as its URL, or selects an existing inline image’s URL. Table opens insertion, formatting, row, column, and alignment controls. Format Table lines up source columns with spaces. Edit image descriptions and table text directly in the source.";
+      const keys = document.createElement("p"); keys.textContent = "Default shortcuts: Ctrl/Cmd+B bold · Ctrl/Cmd+I italic · Ctrl/Cmd+K link · Ctrl/Cmd+backtick inline code. Tab indents; Shift+Tab unindents. Press Esc, then Tab (or Shift+Tab), to move focus out of the source. Your application may customize shortcuts.";
+      const note = document.createElement("p"); note.textContent = "This editor follows CommonMark with selected GFM extensions, including tables, tasks, and strike-through. The specification link opens an external site.";
+      const link = document.createElement("a"); link.textContent = "Read the CommonMark specification"; link.href = "https://spec.commonmark.org/"; link.target = "_blank"; link.rel = "noopener noreferrer";
+      const close = document.createElement("button"); close.type = "button"; close.textContent = "Close";
       guide.append(heading, intro, sections, editing, keys, note, link, close);
       toolbar.parentElement.append(guide);
       listen(close, "click", () => guide.close());
@@ -2792,8 +2960,10 @@ export function init(settings = {}) {
     if (action.name === "side-by-side" && !action.result) return togglePreview(true);
     if (action.name === "guide" && !action.result) return openGuide();
     if (previewing && !sideBySide && !action.result) return false;
+    if (action.name === "table" && !action.result) return toggleTableMenu();
     const run = () => {
-      if (action.name !== "table" || action.result) closeTablePicker();
+      closeTableMenu();
+      if (action.name !== "table-insert" || action.result) closeTablePicker();
       error.hidden = true;
       if (!tableSnapshot) restore();
       const result = action.result ? action.result(api) : builtin(action.name);
@@ -2844,7 +3014,8 @@ export function init(settings = {}) {
       templateSelection(model.text, start, end, syntax, true) : null;
     formatDisabled.image = !!model && !image;
     const table = start != null && end != null ? tableSelection(model.text, start, end, syntax) : null;
-    formatDisabled.table = !!model && !table;
+    formatDisabled["table-insert"] = !!model && !table;
+    formatDisabled["table-format"] = !!model && !tableFormatSelection(model.text, start, end, syntax);
     const row = start != null && end != null ? tableRowSelection(model.text, start, end, syntax) : null;
     formatDisabled["table-row-after"] = !!model && !row;
     formatDisabled["table-row-delete"] = !!model && (!row || row === row.tableBlock.header || row.tableDelimiter);
@@ -2870,12 +3041,13 @@ export function init(settings = {}) {
           affected.every(index => (syntax[index].setext?.level || syntax[index].level || 0) === level);
       }
     }
-    for (const { button, action } of buttons) {
+    for (const { button, action } of [...buttons, ...tableMenuButtons]) {
       if (destroyed || version !== renderVersion) return;
       const active = !composing && (action.state ? !!action.state(api) : !!states[action.name]);
       if (destroyed || version !== renderVersion) return;
       button.classList.toggle(classes.selected, active);
-      if (action.state || !["guide", "link", "image", "table", "table-row-after", "table-row-delete", "table-column-after", "table-column-delete", "line", "undo", "redo", "heading", "heading-smaller", "heading-bigger"].includes(action.name)) button.setAttribute("aria-pressed", String(active));
+      if (button.getAttribute("role") === "menuitemradio") button.setAttribute("aria-checked", String(active));
+      else if (!button.hasAttribute("role") && (action.state || !["guide", "link", "image", "table", "table-insert", "table-format", "table-row-after", "table-row-delete", "table-column-after", "table-column-delete", "line", "undo", "redo", "heading", "heading-smaller", "heading-bigger"].includes(action.name))) button.setAttribute("aria-pressed", String(active));
       if (action.result || !["undo", "redo"].includes(action.name)) {
         button.disabled = composing || (!action.result && previewing && !sideBySide && !["preview", "side-by-side", "guide", "fullscreen"].includes(action.name)) || (!action.result && (formatDisabled[action.name] || (headingAction(action.name) && model && !affected.length)));
       }
@@ -2891,7 +3063,7 @@ export function init(settings = {}) {
       else line.append(document.createElement("br"));
       fragment.append(line);
     }
-    edit(() => closeTablePicker()); savedRange = null; emptyFormat = null; resetKeyboardHint();
+    edit(() => closeTableUI()); savedRange = null; emptyFormat = null; resetKeyboardHint();
     content.replaceChildren(fragment);
     scroll.scrollTop = 0;
     render(true);
@@ -2903,7 +3075,7 @@ export function init(settings = {}) {
       if (destroyed) return;
       finalText = getMarkdown(); destroyed = true;
       exitFullscreen(false);
-      previewVersion++; closeTablePicker(); tablePicker?.remove(); guide?.remove(); savedRange = null; emptyFormat = null; tabEscape = false; mounted.delete(element);
+      previewVersion++; closeTableUI(); tableMenu?.remove(); tablePicker?.remove(); guide?.remove(); savedRange = null; emptyFormat = null; tabEscape = false; mounted.delete(element);
       for (const cleanup of cleanups) cleanup();
       toolbar.remove(); scroll.remove(); preview.remove(); footer.remove();
       element.classList.remove(...ownedClasses, "lightmarkdown-composing", "lightmarkdown-split");
@@ -2919,12 +3091,19 @@ export function init(settings = {}) {
       continue;
     }
     const button = document.createElement("button");
-    button.type = "button"; button.className = classes.button;
+    button.type = "button"; button.className = classes.button; button.tabIndex = -1;
     const title = action.title || action.name || "Custom action";
     const shortcut = shortcuts.find(binding => binding.action === action);
     button.title = title + (shortcut ? " (" + shortcut.label + ")" : "");
     button.setAttribute("aria-label", title);
-    if (action.name === "table" && !action.result) { button.setAttribute("aria-haspopup", "dialog"); button.setAttribute("aria-expanded", "false"); }
+    if (["table", "table-insert"].includes(action.name) && !action.result) {
+      button.setAttribute("aria-haspopup", action.name === "table" ? "menu" : "dialog"); button.setAttribute("aria-expanded", "false");
+    }
+    if (action.name === "table" && !action.result) listen(button, "keydown", event => {
+      if (["ArrowDown", "ArrowUp"].includes(event.key) && !event.altKey && !event.ctrlKey && !event.metaKey && !composing) {
+        event.preventDefault(); toggleTableMenu(event.key === "ArrowUp");
+      }
+    });
     if (shortcut) button.setAttribute("aria-keyshortcuts", shortcut.aria);
     // Configuration is trusted application code, just like the HTML toolbar.
     if (action.icon != null) button.innerHTML = String(action.icon);
@@ -2935,9 +3114,17 @@ export function init(settings = {}) {
   }
   toolbar.append(error);
   if (settings.actions == null) cleanups.push(groupToolbar(toolbar, buttons.map(({ button, action }) => ({ button, name: action.name }))));
+  // Enter through the writing field; keep native toolbar traversal inside.
+  const setToolbarTabIndex = (tabIndex) => {
+    for (const { button } of buttons) if (button.tabIndex !== tabIndex) button.tabIndex = tabIndex;
+  };
+  listen(element, "focusin", () => setToolbarTabIndex(0));
+  listen(element, "focusout", event => {
+    if (!element.contains(event.relatedTarget)) setToolbarTabIndex(-1);
+  });
   const fullscreenEscape = event => {
     if (event.key !== "Escape" || event.defaultPrevented || event.isComposing || composing || !fullscreen) return;
-    if (guide?.open || tableSnapshot) return;
+    if (guide?.open || tableSnapshot || tableMenu && !tableMenu.hidden) return;
     event.preventDefault(); event.stopPropagation(); exitFullscreen();
   };
   listen(document, "keydown", fullscreenEscape);
@@ -2952,7 +3139,7 @@ export function init(settings = {}) {
   listen(preview, "scroll", () => syncSplitScroll(preview, scroll));
   listen(document, "input", updateHistory);
   listen(document, "focusin", updateHistory);
-  listen(content, "focus", () => { closeTablePicker(); remember(); if (!editDepth) updateButtons(); });
+  listen(content, "focus", () => { closeTableUI(); remember(); if (!editDepth) updateButtons(); });
   listen(toolbar, "focusin", () => { resetKeyboardHint(); updateButtons(); });
   listen(content, "blur", resetKeyboardHint);
   for (const node of [element, toolbar]) {
@@ -2960,7 +3147,7 @@ export function init(settings = {}) {
     listen(node, "mousedown", resetKeyboardHint);
   }
   listen(content, "input", () => { emptyFormat = null; resetKeyboardHint(); render(); });
-  listen(content, "compositionstart", () => { closeTablePicker(); emptyFormat = null; resetKeyboardHint(); composing = true; element.classList.add("lightmarkdown-composing"); updateButtons(); });
+  listen(content, "compositionstart", () => { closeTableUI(); emptyFormat = null; resetKeyboardHint(); composing = true; element.classList.add("lightmarkdown-composing"); updateButtons(); });
   listen(content, "compositionend", () => { composing = false; element.classList.remove("lightmarkdown-composing"); render(); });
   listen(content, "beforeinput", event => {
     if (event.inputType?.startsWith("format")) event.preventDefault();

@@ -1,7 +1,7 @@
 /* M1 diagnostic experiment, deliberately separate from the production suite.
  * NODE_PATH=$(npm root -g) node tests/markdown-isolation.js
- * Optional: --serve, --firefox or --chromium, --surface, --plaintext, --profile.
- * --surface focuses the parent-toolbar candidate, including integration checks.
+ * Optional: --serve, --firefox or --chromium, --plaintext, --profile.
+ * Compares inline editors with complete editors in child documents.
  * Uses current dist files without patching the library. --serve prints a URL.
  */
 const assert = require("node:assert/strict");
@@ -13,7 +13,6 @@ const { chromium, firefox } = require("playwright");
 const ROOT = path.resolve(__dirname, "..");
 const FIXTURE = "/tests/fixtures/markdown-isolation.html";
 const PLAINTEXT = process.argv.includes("--plaintext");
-const SURFACE = process.argv.includes("--surface");
 
 async function checks(browser, base, name) {
   const observations = { browser: name, version: browser.version(), contentEditable: PLAINTEXT ? "plaintext-only" : "true", history: {}, grouping: {}, paste: {}, csp: [] };
@@ -43,7 +42,7 @@ async function checks(browser, base, name) {
     });
     const view = id => mode !== "inline" ? page.frameLocator("#frame-" + id) : page.locator("#host-" + id);
     const source = id => view(id).locator(".lightmarkdown-input");
-    const button = (id, title) => (mode === "surface" ? page.locator("#host-" + id) : view(id)).getByRole("button", { name: title, exact: true });
+    const button = (id, title) => view(id).getByRole("button", { name: title, exact: true });
     const get = id => page.evaluate(id => __experiment.editors[id].getMarkdown(), id);
     const set = (id, text) => page.evaluate(({ id, text }) => __experiment.editors[id].setMarkdown(text), { id, text });
     const select = (id, start, end = start) => page.evaluate(({ id, start, end }) => {
@@ -69,7 +68,7 @@ async function checks(browser, base, name) {
     observations.performance = [];
     // Cold pages, ASCII byte sizes, and the fixture's persistent raw-output
     // callback. These are diagnostic samples, not product limits or p95 latency.
-    for (const mode of SURFACE ? ["surface"] : ["inline", "surface"]) {
+    for (const mode of ["inline", "isolated"]) {
       for (const kib of [20, 200]) {
         const h = await open(mode);
         const line = "Paragraph **bold** with a [link](relative) and `code`.\n";
@@ -96,7 +95,7 @@ async function checks(browser, base, name) {
     return observations;
   }
 
-  for (const mode of SURFACE ? ["surface"] : ["inline", "isolated", "surface"]) {
+  for (const mode of ["inline", "isolated"]) {
     const h = await open(mode);
     await h.select("a", 0); await h.page.keyboard.type("alpha ");
     await h.select("b", 0); await h.page.keyboard.type("beta ");
@@ -187,17 +186,9 @@ async function checks(browser, base, name) {
   }
 
   // Deliberately test parent-owned integrations, not just events inside a frame.
-  const integrationMode = SURFACE ? "surface" : "isolated";
-  observations.integrationMode = integrationMode;
-  const h = await open(integrationMode, "remove");
-  async function nextBold(id) {
-    if (SURFACE) {
-      for (let steps = 1; steps <= 2; steps++) {
-        await h.page.keyboard.press("Tab");
-        if (await h.button(id, "Bold").evaluate(node => node === document.activeElement)) return steps;
-      }
-      assert.fail("Parent toolbar must be reachable from the preceding writing surface");
-    }
+  observations.integrationMode = "isolated";
+  const h = await open("isolated", "remove");
+  async function nextSource(id) {
     await h.page.keyboard.press("Tab");
     let steps = 1;
     // Firefox can first focus the editing document's body. Record that extra
@@ -206,18 +197,16 @@ async function checks(browser, base, name) {
       assert.equal(await h.page.evaluate(() => document.activeElement.id), "frame-" + id);
       await h.page.keyboard.press("Tab"); steps++;
     }
-    assert.deepEqual(await h.active(id), { tag: "BUTTON", title: "Bold" });
+    assert.deepEqual(await h.active(id), { tag: "DIV", title: "Markdown source" });
     return steps;
   }
   await h.page.locator("#before").focus();
-  observations.focus = { entryTabs: await nextBold("a") };
+  observations.focus = { entryTabs: await nextSource("a") };
   await h.source("a").focus(); await h.page.keyboard.press("Escape"); await h.page.keyboard.press("Shift+Tab");
   const last = h.button("a", "Redo").locator("..").locator("button:enabled").last();
-  if (SURFACE && !await last.evaluate(node => node === node.ownerDocument.activeElement)) await h.page.keyboard.press("Shift+Tab");
   assert.equal(await last.evaluate(node => node === node.ownerDocument.activeElement), true);
-  await h.source("a").focus(); await h.page.keyboard.press("Escape"); observations.focus.betweenTabs = await nextBold("b");
+  await h.source("a").focus(); await h.page.keyboard.press("Escape"); observations.focus.betweenTabs = await nextSource("b");
   await h.source("b").focus(); await h.page.keyboard.press("Escape"); await h.page.keyboard.press("Tab");
-  if (SURFACE && !await h.page.locator("#after").evaluate(node => node === document.activeElement)) await h.page.keyboard.press("Tab");
   assert.equal(await h.page.locator("#after").evaluate(node => node === document.activeElement), true);
   for (const skin of ["", "bootstrap", "material-classic", "material-outline", "frost", "patina", "sterling"]) {
     for (const palette of ["light", "dark"]) {
@@ -245,10 +234,7 @@ async function checks(browser, base, name) {
     assert.ok(await h.page.locator("#frame-" + id).getAttribute("title"));
     assert.equal(await h.source(id).evaluate(node => node.ownerDocument.documentElement.scrollWidth <= node.ownerDocument.defaultView.innerWidth), true);
   }
-  if (SURFACE) {
-    assert.equal(await h.page.evaluate(() => __experiment.editors.a.element === document.getElementById("host-a")), true);
-    assert.equal(await h.page.evaluate(() => __experiment.editors.a.element.contains(__experiment.editors.a.content)), false);
-  } else assert.equal(await h.page.evaluate(() => {
+  assert.equal(await h.page.evaluate(() => {
     try { maiden.init({ element: __experiment.editors.a.element }); return false; }
     catch (error) { return error instanceof TypeError; }
   }), true, "Parent-realm init still refuses a foreign-document host; this is not a drop-in integration");
@@ -264,64 +250,7 @@ async function checks(browser, base, name) {
   assert.deepEqual(teardown, { text: "body a", final: "body a", guarded: true, frames: 2, fresh: "body a" });
   await h.close();
 
-  if (SURFACE) {
-    const c = await open("surface");
-    const initial = await c.page.evaluate(async () => {
-      __experiment.destroy("a");
-      const host = document.getElementById("host-a");
-      host.classList.add("app-owned");
-      const owned = document.createElement("span"); owned.textContent = "Application-owned content"; host.append(owned);
-      window.__surfaceState = []; window.__surfaceChanges = []; window.__surfaceResult = false;
-      await __experiment.mount("a", {
-        actions: ["bold", { title: "Insert bang", icon: "!",
-          state: api => {
-            __surfaceState.push({ mount: api.element === host, toolbar: !!host.querySelector('[role="group"]'),
-              foreignContent: api.content.ownerDocument !== document, text: api.getMarkdown() });
-            return true;
-          },
-          result: api => { __surfaceResult = api === __experiment.editors.a; return api.insertText("!"); }
-        }],
-        classes: { actionbar: "experiment-actionbar", button: "experiment-button", content: "experiment-content", selected: "experiment-selected" },
-        onChange: value => __surfaceChanges.push(value)
-      });
-      return { initialText: __surfaceState[0].text, state: __surfaceState.every(value => value.mount && value.toolbar && value.foreignContent),
-        changes: __surfaceChanges, toolbarParent: host.querySelector('[role="group"]').ownerDocument === document };
-    });
-    assert.deepEqual(initial, { initialText: "", state: true, changes: ["body a"], toolbarParent: true });
-    assert.equal(await c.source("a").evaluate(node => node.ownerDocument.defaultView.getComputedStyle(node).paddingLeft), "13px");
-    await c.select("a", 0); await c.button("a", "Insert bang").click();
-    assert.equal(await c.get("a"), "!body a");
-    assert.equal(await c.page.evaluate(() => __surfaceResult), true);
-    assert.equal(await c.button("a", "Insert bang").getAttribute("aria-pressed"), "true");
-    assert.equal(await c.button("a", "Insert bang").evaluate(node => node.classList.contains("experiment-selected")), true);
-    await c.page.keyboard.press("Control+z"); assert.equal(await c.get("a"), "body a");
-    assert.deepEqual(await c.page.evaluate(() => __surfaceChanges), ["body a", "!body a", "body a"]);
-    await c.source("a").dispatchEvent("compositionstart");
-    await c.page.waitForFunction(() => __experiment.editors.a.element.classList.contains("lightmarkdown-composing"));
-    assert.equal(await c.button("a", "Insert bang").isDisabled(), true);
-    await c.source("a").dispatchEvent("compositionend");
-    await c.page.waitForFunction(() => !__experiment.editors.a.element.classList.contains("lightmarkdown-composing"));
-    await c.page.evaluate(() => {
-      __experiment.editors.a.element.style.setProperty("--lightmarkdown-font-size", "18px");
-      __experiment.editors.a.element.style.setProperty("--lightmetal-color", "#123456");
-    });
-    await c.page.waitForFunction(() => {
-      const node = __experiment.editors.a.content, style = node.ownerDocument.defaultView.getComputedStyle(node);
-      return style.fontSize === "18px" && style.caretColor === "rgb(18, 52, 86)";
-    });
-    const cleanup = await c.page.evaluate(() => {
-      const api = __experiment.editors.a, host = api.element;
-      api.destroy(); api.destroy();
-      return { frames: host.querySelectorAll("iframe").length, toolbar: host.querySelector('[role="group"]') === null,
-        owned: host.textContent === "Application-owned content" && host.classList.contains("app-owned"),
-        classes: !host.classList.contains("lightmarkdown"), final: api.getMarkdown(), blocked: api.insertText("late") === false };
-    });
-    assert.deepEqual(cleanup, { frames: 0, toolbar: true, owned: true, classes: true, final: "body a", blocked: true });
-    await c.close();
-    observations.customIntegration = "parent API/state/result, classes, variables, composition and owned-content teardown checked";
-  }
-
-  const f = await open(integrationMode, "remove", true);
+  const f = await open("isolated", "remove", true);
   await f.select("a", 0); await f.page.keyboard.type("file edit ");
   await f.button("a", "Undo").click(); assert.equal(await f.get("a"), "body a");
   assert.equal(await f.get("b"), "body b");
@@ -341,7 +270,7 @@ async function main() {
   await new Promise(resolve => server.listen(0, "127.0.0.1", resolve));
   const base = `http://127.0.0.1:${server.address().port}`;
   if (process.argv.includes("--serve")) {
-    console.log("Experimental fixture: " + base + FIXTURE + "?mode=" + (SURFACE ? "surface" : "isolated") + "&callback=remove&plaintext=" + (PLAINTEXT ? 1 : 0));
+    console.log("Experimental fixture: " + base + FIXTURE + "?mode=isolated&callback=remove&plaintext=" + (PLAINTEXT ? 1 : 0));
     console.log("Leave this process running. Ctrl+C stops only this server.");
     return;
   }

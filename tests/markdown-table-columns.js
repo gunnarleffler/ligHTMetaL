@@ -150,26 +150,17 @@ async function tableColumnChecks(browser, base, name) {
     await page.evaluate(() => { window.__deadColumns = __markdownEditor.content; __markdownEditor.destroy(); });
     assert.equal(await page.evaluate(() => __deadColumns.dispatchEvent(new KeyboardEvent("keydown", { key: "C", altKey: true, shiftKey: true, bubbles: true, cancelable: true }))), true);
     monitor = false;
-    for (const mode of ["whole", "surface"]) {
-      await page.goto(base + (mode === "whole" ? "/examples/markdown-iframe.html" : "/examples/markdown.html?mode=isolated"));
-      if (mode === "whole") {
-        await page.waitForFunction(() => !document.getElementById("read-markdown").disabled);
-        await page.frameLocator("#isolated-editor").locator(".lightmarkdown-input").evaluate((node, text) => {
-          const win = node.ownerDocument.defaultView, host = node.closest(".lightmarkdown"); win.__markdownEditor.destroy(); win.__columnChanges = 0;
-          win.__markdownEditor = win.maiden.init({ element: host, actions: ["table-column-after", "table-column-delete", "undo", "redo"], onChange: () => win.__columnChanges++ });
-          win.__markdownEditor.setMarkdown(text); win.__columnChanges = 0;
-        }, table);
-      } else {
-        await page.waitForFunction(() => window.__markdownEditor && __markdownMode === "isolated");
-        await page.evaluate(async text => {
-          __markdownEditor.destroy(); window.__columnChanges = 0;
-          window.__markdownEditor = await __initMarkdownSurface({ element: document.getElementById("markdown-editor"), actions: ["table-column-after", "table-column-delete", "undo", "redo"], onChange: () => __columnChanges++ });
-          __markdownEditor.setMarkdown(text); window.__columnChanges = 0;
-        }, table);
-      }
-      const view = page.frameLocator(mode === "whole" ? "#isolated-editor" : ".lightmarkdown-surface-frame");
-      const input = view.locator(".lightmarkdown-input"), toolbar = (mode === "whole" ? view : page).getByRole("group", { name: "Markdown formatting" });
-      const read = () => mode === "whole" ? input.evaluate(node => node.ownerDocument.defaultView.__markdownEditor.getMarkdown()) : page.evaluate(() => __markdownEditor.getMarkdown());
+    {
+      await page.goto(base + "/examples/markdown-iframe.html");
+      await page.waitForFunction(() => !document.getElementById("read-markdown").disabled);
+      const view = page.frameLocator("#isolated-editor");
+      const input = view.locator(".lightmarkdown-input"), toolbar = view.getByRole("group", { name: "Markdown formatting" });
+      await input.evaluate((node, text) => {
+        const win = node.ownerDocument.defaultView, host = node.closest(".lightmarkdown"); win.__markdownEditor.destroy(); win.__columnChanges = 0;
+        win.__markdownEditor = win.maiden.init({ element: host, actions: ["table-column-after", "table-column-delete", "undo", "redo"], onChange: () => win.__columnChanges++ });
+        win.__markdownEditor.setMarkdown(text); win.__columnChanges = 0;
+      }, table);
+      const read = () => input.evaluate(node => node.ownerDocument.defaultView.__markdownEditor.getMarkdown());
       await input.evaluate(node => {
         const doc = node.ownerDocument, range = doc.createRange(); range.setStart(node.children[2].firstChild, 2); range.collapse(true);
         node.focus(); doc.getSelection().removeAllRanges(); doc.getSelection().addRange(range); node.dispatchEvent(new Event("focus"));
@@ -177,12 +168,12 @@ async function tableColumnChecks(browser, base, name) {
       monitor = true; await toolbar.getByRole("button", { name: titles[0], exact: true }).click(); assert.equal(await read(), added);
       assert.equal(await input.evaluate(node => node.ownerDocument.getSelection().toString()), "Column");
       await toolbar.getByRole("button", { name: titles[1], exact: true }).click(); assert.equal(await read(), table);
-      assert.equal(mode === "whole" ? await input.evaluate(node => node.ownerDocument.defaultView.__columnChanges) : await page.evaluate(() => __columnChanges), 2);
+      assert.equal(await input.evaluate(node => node.ownerDocument.defaultView.__columnChanges), 2);
       await page.keyboard.press("Control+z"); assert.equal(await read(), added); await page.keyboard.press("Control+z"); assert.equal(await read(), table);
       monitor = false;
     }
     assert.deepEqual(errors, []); assert.deepEqual(requests, []);
-    console.log(`${name}: table columns, source/cell selection, alignment/containers, ragged/literal guards, callbacks/native history, keyboard-only/custom/teardown and both iframe layouts: ok`);
+    console.log(`${name}: table columns, source/cell selection, alignment/containers, ragged/literal guards, callbacks/native history, keyboard-only/custom/teardown and whole-editor iframe: ok`);
   } finally { await page.close(); }
 }
 module.exports = { tableColumnChecks };

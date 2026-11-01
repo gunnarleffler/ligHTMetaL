@@ -112,7 +112,7 @@ async function runSkinChecks(browser, url, distPrefix) {
             `${colorScheme}/${mode}: pinned or system palette failed`);
         }
       }
-      for (const name of skinNames) {
+      for (const name of ['default', ...skinNames]) {
         const host = page.locator(`[data-skin-check="${name}"]`);
         for (const mode of ["light", "dark"]) {
           await page.evaluate(({ name, mode }) => {
@@ -127,10 +127,20 @@ async function runSkinChecks(browser, url, distPrefix) {
           await page.waitForFunction((name) => Object.entries(window.__skinEditors).every(([key, editor]) =>
             key === name || editor.element.querySelector(".lightmetal-tablebar").hidden), name);
           const contentHeight = await host.locator(".lightmetal-content").evaluate((node) => node.getBoundingClientRect().height);
+          await page.keyboard.press("Shift+Tab"); await page.keyboard.press("Tab");
+          assert.equal(await host.locator('.lightmetal-content').evaluate(node => {
+            const style = getComputedStyle(node);
+            return node === document.activeElement && style.outlineStyle !== 'none' && parseFloat(style.outlineWidth) >= 2;
+          }), true, `${name}/${mode}: visual editing focus is not visible`);
           await host.locator('button[title="Source"]').click();
           assert.equal(await host.locator("textarea").isVisible(), true, `${name}/${mode}/${minified}: Source did not open`);
           assert.equal(await host.locator(".lightmetal-tablebar").isHidden(), true);
           assert.equal(await host.locator("textarea").evaluate((node) => node.getBoundingClientRect().height), contentHeight);
+          await page.keyboard.press("Shift+Tab"); await page.keyboard.press("Tab");
+          assert.equal(await host.locator('textarea').evaluate(node => {
+            const style = getComputedStyle(node);
+            return node === document.activeElement && style.outlineStyle !== 'none' && parseFloat(style.outlineWidth) >= 2;
+          }), true, `${name}/${mode}: Source editing focus is not visible`);
           await host.locator("textarea").fill("<p>Source round trip</p>");
           await host.locator('button[title="Source"]').click();
           assert.equal(await host.locator("textarea").isHidden(), true);
@@ -145,9 +155,9 @@ async function runSkinChecks(browser, url, distPrefix) {
           await host.locator('button[title="Bold"]').click();
           await page.waitForFunction((name) => window.__skinEditors[name].element
             .querySelector('button[title="Bold"]').classList.contains("lightmetal-button-selected"), name);
-          const trigger = host.getByRole("button", { name: "Insert table", exact: true });
+          const trigger = host.getByRole("button", { name: "Table", exact: true });
           await trigger.click();
-          const popup = host.locator(".lightmetal-table-dropdown");
+          const popup = host.getByRole("menu", { name: "Table", exact: true });
           assert.equal(await popup.isVisible(), true);
           await page.keyboard.press("Escape");
           assert.equal(await popup.isHidden(), true);
@@ -171,17 +181,22 @@ async function runSkinChecks(browser, url, distPrefix) {
         }
       }
       await page.setViewportSize({ width: 390, height: 700 });
-      for (const name of skinNames) {
+      for (const name of ['default', ...skinNames]) {
         const host = page.locator(`[data-skin-check="${name}"]`);
         assert.equal(await host.locator(".lightmetal-actionbar").evaluate((node) => {
           const style = getComputedStyle(node);
           return style.overflowX === "auto" && style.flexWrap === "nowrap" && node.getBoundingClientRect().right <= innerWidth;
         }), true, `${name}: toolbar must scroll horizontally without overflowing the page`);
-        await host.locator(".lightmetal-content").focus();
+        await host.evaluate(node => {
+          const before = document.createElement('button'); before.id = 'skin-entry-before'; before.textContent = 'Before editor'; node.before(before);
+        });
+        await page.locator('#skin-entry-before').focus(); await page.keyboard.press('Tab');
+        assert.equal(await host.locator('.lightmetal-content').evaluate(node => node === document.activeElement), true, `${name}: narrow Tab entry must skip the scrolling toolbar`);
+        await page.locator('#skin-entry-before').evaluate(node => node.remove());
         await page.waitForFunction((name) => Object.entries(window.__skinEditors).every(([key, editor]) =>
           key === name || editor.element.querySelector(".lightmetal-tablebar").hidden), name);
-        await host.getByRole("button", { name: "Insert table", exact: true }).click();
-        const popup = host.locator(".lightmetal-table-dropdown");
+        await host.getByRole("button", { name: "Table", exact: true }).click();
+        const popup = host.getByRole("menu", { name: "Table", exact: true });
         const bounds = await popup.boundingBox();
         assert.ok(bounds.width > 0 && bounds.x >= 0 && bounds.x + bounds.width <= 390, `${name}: popup is clipped`);
         await page.keyboard.press("Escape");

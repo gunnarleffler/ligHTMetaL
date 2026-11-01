@@ -1,163 +1,78 @@
 <!doctype html>
 <html lang="en">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Highlighter — native grammar prototype</title>
-<style>
-body { margin: 2rem auto; padding: 0 1rem; max-width: 76rem; font-family: system-ui, sans-serif; background: #edf0f4; color: #24292f; }
-.examples { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 30rem), 1fr)); gap: 1rem; }
-.code { padding: 1.25rem; border: 1px solid #808080; border-radius: .5rem; overflow: auto; tab-size: 2; font: .9rem/1.7 ui-monospace, monospace; }
-.code.theme-light { color-scheme: light; color: #24292f; background: #ffffff; }
-.code.theme-light { --code-plain: #24292f; }
-.code.theme-light .token.plain { color: var(--code-plain); font-weight: 400; font-style: normal; text-decoration: none; }
-.code.theme-light { --code-comment: #57606a; }
-.code.theme-light .token.comment { color: var(--code-comment); font-weight: 400; font-style: italic; text-decoration: none; }
-.code.theme-light { --code-keyword: #cf222e; }
-.code.theme-light .token.keyword { color: var(--code-keyword); font-weight: 400; font-style: normal; text-decoration: none; }
-.code.theme-light { --code-string: #0a3069; }
-.code.theme-light .token.string { color: var(--code-string); font-weight: 400; font-style: normal; text-decoration: none; }
-.code.theme-light { --code-number: #0550ae; }
-.code.theme-light .token.number { color: var(--code-number); font-weight: 400; font-style: normal; text-decoration: none; }
-.code.theme-light { --code-boolean: #8250df; }
-.code.theme-light .token.boolean { color: var(--code-boolean); font-weight: 400; font-style: normal; text-decoration: none; }
-.code.theme-light { --code-constant: #8250df; }
-.code.theme-light .token.constant { color: var(--code-constant); font-weight: 400; font-style: normal; text-decoration: none; }
-.code.theme-light { --code-function: #6639ba; }
-.code.theme-light .token.function { color: var(--code-function); font-weight: 400; font-style: normal; text-decoration: none; }
-.code.theme-light { --code-type: #953800; }
-.code.theme-light .token.type { color: var(--code-type); font-weight: 400; font-style: normal; text-decoration: none; }
-.code.theme-light { --code-variable: #24292f; }
-.code.theme-light .token.variable { color: var(--code-variable); font-weight: 400; font-style: normal; text-decoration: none; }
-.code.theme-light { --code-property: #953800; }
-.code.theme-light .token.property { color: var(--code-property); font-weight: 400; font-style: normal; text-decoration: none; }
-.code.theme-light { --code-operator: #24292f; }
-.code.theme-light .token.operator { color: var(--code-operator); font-weight: 400; font-style: normal; text-decoration: none; }
-.code.theme-light { --code-punctuation: #24292f; }
-.code.theme-light .token.punctuation { color: var(--code-punctuation); font-weight: 400; font-style: normal; text-decoration: none; }
-.code.theme-light { --code-tag: #116329; }
-.code.theme-light .token.tag { color: var(--code-tag); font-weight: 400; font-style: normal; text-decoration: none; }
-.code.theme-light { --code-attribute: #0550ae; }
-.code.theme-light .token.attribute { color: var(--code-attribute); font-weight: 400; font-style: normal; text-decoration: none; }
-.code.theme-dark { color-scheme: dark; color: #e6edf3; background: #0d1117; }
-.code.theme-dark { --code-plain: #e6edf3; }
-.code.theme-dark .token.plain { color: var(--code-plain); font-weight: 400; font-style: normal; text-decoration: none; }
-.code.theme-dark { --code-comment: #8b949e; }
-.code.theme-dark .token.comment { color: var(--code-comment); font-weight: 400; font-style: italic; text-decoration: none; }
-.code.theme-dark { --code-keyword: #ff7b72; }
-.code.theme-dark .token.keyword { color: var(--code-keyword); font-weight: 400; font-style: normal; text-decoration: none; }
-.code.theme-dark { --code-string: #a5d6ff; }
-.code.theme-dark .token.string { color: var(--code-string); font-weight: 400; font-style: normal; text-decoration: none; }
-.code.theme-dark { --code-number: #79c0ff; }
-.code.theme-dark .token.number { color: var(--code-number); font-weight: 400; font-style: normal; text-decoration: none; }
-.code.theme-dark { --code-boolean: #d2a8ff; }
-.code.theme-dark .token.boolean { color: var(--code-boolean); font-weight: 400; font-style: normal; text-decoration: none; }
-.code.theme-dark { --code-constant: #d2a8ff; }
-.code.theme-dark .token.constant { color: var(--code-constant); font-weight: 400; font-style: normal; text-decoration: none; }
-.code.theme-dark { --code-function: #d2a8ff; }
-.code.theme-dark .token.function { color: var(--code-function); font-weight: 400; font-style: normal; text-decoration: none; }
-.code.theme-dark { --code-type: #ffa657; }
-.code.theme-dark .token.type { color: var(--code-type); font-weight: 400; font-style: normal; text-decoration: none; }
-.code.theme-dark { --code-variable: #e6edf3; }
-.code.theme-dark .token.variable { color: var(--code-variable); font-weight: 400; font-style: normal; text-decoration: none; }
-.code.theme-dark { --code-property: #ffa657; }
-.code.theme-dark .token.property { color: var(--code-property); font-weight: 400; font-style: normal; text-decoration: none; }
-.code.theme-dark { --code-operator: #e6edf3; }
-.code.theme-dark .token.operator { color: var(--code-operator); font-weight: 400; font-style: normal; text-decoration: none; }
-.code.theme-dark { --code-punctuation: #e6edf3; }
-.code.theme-dark .token.punctuation { color: var(--code-punctuation); font-weight: 400; font-style: normal; text-decoration: none; }
-.code.theme-dark { --code-tag: #7ee787; }
-.code.theme-dark .token.tag { color: var(--code-tag); font-weight: 400; font-style: normal; text-decoration: none; }
-.code.theme-dark { --code-attribute: #79c0ff; }
-.code.theme-dark .token.attribute { color: var(--code-attribute); font-weight: 400; font-style: normal; text-decoration: none; }
-</style>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ligHTMetaL::poliSH — syntax highlighter</title>
+  <link rel="stylesheet" href="../examples/showcase.css">
+  <link rel="stylesheet" href="../dist/polish.css">
 </head>
 <body>
-<h1>Native grammar highlighting prototype</h1>
-<p>One tokenization per example, two CSS themes. Source is escaped; this page needs no JavaScript.</p>
-<h2>JSON</h2><div class="examples"><section><h3>light</h3><pre class="code theme-light"><code><span class="token punctuation">{</span>
-  <span class="token property">&quot;name&quot;</span><span class="token punctuation">:</span> <span class="token string">&quot;Our little highlighter&quot;</span><span class="token punctuation">,</span>
-  <span class="token property">&quot;enabled&quot;</span><span class="token punctuation">:</span> <span class="token boolean">true</span><span class="token punctuation">,</span>
-  <span class="token property">&quot;count&quot;</span><span class="token punctuation">:</span> <span class="token number">42</span><span class="token punctuation">,</span>
-  <span class="token property">&quot;ratio&quot;</span><span class="token punctuation">:</span> <span class="token number">-1.25e+2</span><span class="token punctuation">,</span>
-  <span class="token property">&quot;nothing&quot;</span><span class="token punctuation">:</span> <span class="token constant">null</span><span class="token punctuation">,</span>
-  <span class="token property">&quot;escaped&quot;</span><span class="token punctuation">:</span> <span class="token string">&quot;Hello \&quot;world\&quot;&quot;</span><span class="token punctuation">,</span>
-  <span class="token property">&quot;html&quot;</span><span class="token punctuation">:</span> <span class="token string">&quot;&lt;script&gt;alert(&#39;safe to display&#39;)&lt;/script&gt;&quot;</span><span class="token punctuation">,</span>
-  <span class="token property">&quot;languages&quot;</span><span class="token punctuation">:</span> <span class="token punctuation">[</span><span class="token string">&quot;JSON&quot;</span><span class="token punctuation">,</span> <span class="token string">&quot;More coming soon 😀&quot;</span><span class="token punctuation">]</span>
-<span class="token punctuation">}</span></code></pre></section><section><h3>dark</h3><pre class="code theme-dark"><code><span class="token punctuation">{</span>
-  <span class="token property">&quot;name&quot;</span><span class="token punctuation">:</span> <span class="token string">&quot;Our little highlighter&quot;</span><span class="token punctuation">,</span>
-  <span class="token property">&quot;enabled&quot;</span><span class="token punctuation">:</span> <span class="token boolean">true</span><span class="token punctuation">,</span>
-  <span class="token property">&quot;count&quot;</span><span class="token punctuation">:</span> <span class="token number">42</span><span class="token punctuation">,</span>
-  <span class="token property">&quot;ratio&quot;</span><span class="token punctuation">:</span> <span class="token number">-1.25e+2</span><span class="token punctuation">,</span>
-  <span class="token property">&quot;nothing&quot;</span><span class="token punctuation">:</span> <span class="token constant">null</span><span class="token punctuation">,</span>
-  <span class="token property">&quot;escaped&quot;</span><span class="token punctuation">:</span> <span class="token string">&quot;Hello \&quot;world\&quot;&quot;</span><span class="token punctuation">,</span>
-  <span class="token property">&quot;html&quot;</span><span class="token punctuation">:</span> <span class="token string">&quot;&lt;script&gt;alert(&#39;safe to display&#39;)&lt;/script&gt;&quot;</span><span class="token punctuation">,</span>
-  <span class="token property">&quot;languages&quot;</span><span class="token punctuation">:</span> <span class="token punctuation">[</span><span class="token string">&quot;JSON&quot;</span><span class="token punctuation">,</span> <span class="token string">&quot;More coming soon 😀&quot;</span><span class="token punctuation">]</span>
-<span class="token punctuation">}</span></code></pre></section></div>
-<h2>JavaScript</h2><div class="examples"><section><h3>light</h3><pre class="code theme-light"><code><span class="token comment">/* Nested template expressions */</span>
-<span class="token keyword">const</span> <span class="token variable">greeting</span> <span class="token operator">=</span> <span class="token string">`Hello </span><span class="token punctuation">${</span><span class="token variable">user</span><span class="token punctuation">.</span><span class="token variable">name</span> <span class="token operator">??</span> <span class="token string">&quot;world&quot;</span><span class="token punctuation">}</span><span class="token string">!`</span><span class="token punctuation">;</span>
-<span class="token keyword">const</span> <span class="token variable">nested</span> <span class="token operator">=</span> <span class="token string">`Value: </span><span class="token punctuation">${{</span> <span class="token variable">n</span><span class="token operator">:</span> <span class="token string">`inner </span><span class="token punctuation">${</span><span class="token number">1</span> <span class="token operator">+</span> <span class="token number">2</span><span class="token punctuation">}</span><span class="token string">`</span> <span class="token punctuation">}.</span><span class="token variable">n</span><span class="token punctuation">}</span><span class="token string">`</span><span class="token punctuation">;</span>
-<span class="token keyword">const</span> <span class="token variable">pattern</span> <span class="token operator">=</span> <span class="token string">/hello[\\s]+world/gi</span><span class="token punctuation">;</span>
-<span class="token keyword">function</span> <span class="token function">greet</span><span class="token punctuation">(</span><span class="token variable">name</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
-  <span class="token keyword">return</span> <span class="token variable">greeting</span> <span class="token operator">+</span> <span class="token variable">name</span><span class="token punctuation">;</span> <span class="token comment">// Lexical highlighting</span>
-<span class="token punctuation">}</span></code></pre></section><section><h3>dark</h3><pre class="code theme-dark"><code><span class="token comment">/* Nested template expressions */</span>
-<span class="token keyword">const</span> <span class="token variable">greeting</span> <span class="token operator">=</span> <span class="token string">`Hello </span><span class="token punctuation">${</span><span class="token variable">user</span><span class="token punctuation">.</span><span class="token variable">name</span> <span class="token operator">??</span> <span class="token string">&quot;world&quot;</span><span class="token punctuation">}</span><span class="token string">!`</span><span class="token punctuation">;</span>
-<span class="token keyword">const</span> <span class="token variable">nested</span> <span class="token operator">=</span> <span class="token string">`Value: </span><span class="token punctuation">${{</span> <span class="token variable">n</span><span class="token operator">:</span> <span class="token string">`inner </span><span class="token punctuation">${</span><span class="token number">1</span> <span class="token operator">+</span> <span class="token number">2</span><span class="token punctuation">}</span><span class="token string">`</span> <span class="token punctuation">}.</span><span class="token variable">n</span><span class="token punctuation">}</span><span class="token string">`</span><span class="token punctuation">;</span>
-<span class="token keyword">const</span> <span class="token variable">pattern</span> <span class="token operator">=</span> <span class="token string">/hello[\\s]+world/gi</span><span class="token punctuation">;</span>
-<span class="token keyword">function</span> <span class="token function">greet</span><span class="token punctuation">(</span><span class="token variable">name</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
-  <span class="token keyword">return</span> <span class="token variable">greeting</span> <span class="token operator">+</span> <span class="token variable">name</span><span class="token punctuation">;</span> <span class="token comment">// Lexical highlighting</span>
-<span class="token punctuation">}</span></code></pre></section></div>
-<h2>Python</h2><div class="examples"><section><h3>light</h3><pre class="code theme-light"><code><span class="token keyword">def</span> <span class="token function">greet</span><span class="token punctuation">(</span><span class="token variable">name</span><span class="token punctuation">)</span><span class="token operator">:</span>
-    <span class="token string">&quot;&quot;&quot;A multiline description.
-    Keywords like return stay string-colored here.
-    &quot;&quot;&quot;</span>
-    <span class="token variable">enabled</span> <span class="token operator">=</span> <span class="token boolean">True</span>
-    <span class="token comment"># f-string expressions are not highlighted yet</span>
-    <span class="token keyword">return</span> <span class="token string">f&quot;Hello {name}&quot;</span> <span class="token keyword">if</span> <span class="token variable">enabled</span> <span class="token keyword">else</span> <span class="token constant">None</span>
-</code></pre></section><section><h3>dark</h3><pre class="code theme-dark"><code><span class="token keyword">def</span> <span class="token function">greet</span><span class="token punctuation">(</span><span class="token variable">name</span><span class="token punctuation">)</span><span class="token operator">:</span>
-    <span class="token string">&quot;&quot;&quot;A multiline description.
-    Keywords like return stay string-colored here.
-    &quot;&quot;&quot;</span>
-    <span class="token variable">enabled</span> <span class="token operator">=</span> <span class="token boolean">True</span>
-    <span class="token comment"># f-string expressions are not highlighted yet</span>
-    <span class="token keyword">return</span> <span class="token string">f&quot;Hello {name}&quot;</span> <span class="token keyword">if</span> <span class="token variable">enabled</span> <span class="token keyword">else</span> <span class="token constant">None</span>
-</code></pre></section></div>
-<h2>TypeScript</h2><div class="examples"><section><h3>light</h3><pre class="code theme-light"><code><span class="token keyword">interface</span> <span class="token type">Person</span> <span class="token punctuation">{</span>
-  <span class="token keyword">readonly</span> <span class="token variable">name</span><span class="token operator">:</span> <span class="token type">string</span><span class="token punctuation">;</span>
-  <span class="token variable">age</span><span class="token operator">?:</span> <span class="token type">number</span><span class="token punctuation">;</span>
-<span class="token punctuation">}</span>
+<main class="page">
+  <h1>ligHTMetaL::poliSH</h1>
+  <img class="polish-logo" src="../examples/polish.png" alt="ligHTMetaL::poliSH logo" width="520">
+  <p>Code in. Highlighted HTML out. No runtime dependencies.</p>
+  <nav aria-label="Projects"><a href="index.html">All four libraries</a><a href="html.html">HTML editor</a><a href="markdown.html">Markdown editor</a><a href="meltdown.html">Markdown parser</a></nav>
+  <p>Highlight 49 languages, choose from eleven themes, or convert ANSI-colored text to HTML.
+    Use poliSH on its own in browsers or Node.js, or add it to MeltDown and MaiDEn through a code-block hook.</p>
+  <h2>Try it</h2>
+  <div class="controls">
+    <label>Language <select id="polish-language"></select></label>
+    <label>Theme <select id="polish-theme"></select></label>
+  </div>
+  <label for="polish-input">Code to highlight</label>
+  <textarea id="polish-input" spellcheck="false">// Code, with a little poliSH.
+const message = 'Your code. Your colors.';
+console.log(message);</textarea>
+  <h3>Highlighted result</h3>
+  <pre id="polish-output" class="code theme-light" tabindex="0" aria-label="Highlighted code"><code></code></pre>
+  <details><summary>Generated HTML</summary><pre data-code-language="html" id="polish-html" class="output" tabindex="0"></pre></details>
+  <h2>ANSI art, not an image</h2>
+  <p>The logo below is terminal text. poliSH turns its 24-bit foreground and background colors into HTML.
+    <a id="polish-ansi-source" href="../examples/POLISH.ANS" download>Download the original ANSI art</a>.
+    Edit or replace <code>POLISH.ANS</code>, then reload the art. No rebuild needed.</p>
+  <div class="controls ansi-controls">
+    <button id="polish-ansi-reload" class="tool" type="button">Reload art</button>
+    <label>Open ANSI file <input id="polish-ansi-file" type="file" accept=".ans,.ansi,.txt,text/plain"></label>
+  </div>
+  <p id="polish-ansi-status" role="status">Loading ANSI art…</p>
+  <pre id="polish-ansi-art" class="code ansi-art" role="img" aria-label="ANSI art rendered as colored text" tabindex="0" hidden><code></code></pre>
+  <h2>Quickstart: browser script</h2>
+  <p>Copy the prebuilt CSS and JavaScript beside your page. The standalone build includes the complete language catalog; instances register only what you pass.</p>
+  <pre data-code-language="html"><code>&lt;link rel="stylesheet" href="polish.css"&gt;
+&lt;pre class="code theme-dark"&gt;&lt;code id="code"&gt;&lt;/code&gt;&lt;/pre&gt;
+&lt;script src="polish.js"&gt;&lt;/script&gt;
+&lt;script&gt;
+  const highlighter = polish.createHighlighter({ languages: polish.allLanguages });
+  document.getElementById('code').innerHTML =
+    highlighter.highlight('const answer = 42;', 'js');
+&lt;/script&gt;</code></pre>
+  <h2>ES modules and selected languages</h2>
+  <p>Use <code>dist/polish.esm.js</code> for the full-catalog module. With a bundler, import the core and just the grammars you need:</p>
+  <pre data-code-language="javascript"><code>import { createHighlighter } from 'lightmetal/src/polish.js';
+import javascript from 'lightmetal/src/polish/languages/javascript.js';
 
-<span class="token keyword">type</span> <span class="token type">Maybe</span><span class="token operator">&lt;</span><span class="token type">T</span><span class="token operator">&gt;</span> <span class="token operator">=</span> <span class="token type">T</span> <span class="token operator">|</span> <span class="token constant">null</span><span class="token punctuation">;</span>
-<span class="token keyword">function</span> <span class="token function">identity</span><span class="token operator">&lt;</span><span class="token type">T</span><span class="token operator">&gt;</span><span class="token punctuation">(</span><span class="token variable">value</span><span class="token operator">:</span> <span class="token type">T</span><span class="token punctuation">)</span><span class="token operator">:</span> <span class="token type">T</span> <span class="token punctuation">{</span>
-  <span class="token keyword">return</span> <span class="token variable">value</span><span class="token punctuation">;</span>
-<span class="token punctuation">}</span>
-<span class="token keyword">const</span> <span class="token variable">person</span><span class="token operator">:</span> <span class="token type">Maybe</span><span class="token operator">&lt;</span><span class="token type">Person</span><span class="token operator">&gt;</span> <span class="token operator">=</span> <span class="token function">identity</span><span class="token operator">&lt;</span><span class="token type">Person</span><span class="token operator">&gt;</span><span class="token punctuation">({</span> <span class="token variable">name</span><span class="token operator">:</span> <span class="token string">&quot;Ada&quot;</span> <span class="token punctuation">});</span></code></pre></section><section><h3>dark</h3><pre class="code theme-dark"><code><span class="token keyword">interface</span> <span class="token type">Person</span> <span class="token punctuation">{</span>
-  <span class="token keyword">readonly</span> <span class="token variable">name</span><span class="token operator">:</span> <span class="token type">string</span><span class="token punctuation">;</span>
-  <span class="token variable">age</span><span class="token operator">?:</span> <span class="token type">number</span><span class="token punctuation">;</span>
-<span class="token punctuation">}</span>
+const highlighter = createHighlighter({ languages: [javascript] });
+const html = highlighter.highlight('const answer = 42;', 'js');</code></pre>
+  <h2>Highlight MeltDown code blocks</h2>
+  <pre data-code-language="javascript"><code>const highlighter = polish.createHighlighter({ languages: polish.allLanguages });
+const render = markdown =&gt; meltDown.parse(markdown, {
+  highlight: highlighter.highlight
+});
 
-<span class="token keyword">type</span> <span class="token type">Maybe</span><span class="token operator">&lt;</span><span class="token type">T</span><span class="token operator">&gt;</span> <span class="token operator">=</span> <span class="token type">T</span> <span class="token operator">|</span> <span class="token constant">null</span><span class="token punctuation">;</span>
-<span class="token keyword">function</span> <span class="token function">identity</span><span class="token operator">&lt;</span><span class="token type">T</span><span class="token operator">&gt;</span><span class="token punctuation">(</span><span class="token variable">value</span><span class="token operator">:</span> <span class="token type">T</span><span class="token punctuation">)</span><span class="token operator">:</span> <span class="token type">T</span> <span class="token punctuation">{</span>
-  <span class="token keyword">return</span> <span class="token variable">value</span><span class="token punctuation">;</span>
-<span class="token punctuation">}</span>
-<span class="token keyword">const</span> <span class="token variable">person</span><span class="token operator">:</span> <span class="token type">Maybe</span><span class="token operator">&lt;</span><span class="token type">Person</span><span class="token operator">&gt;</span> <span class="token operator">=</span> <span class="token function">identity</span><span class="token operator">&lt;</span><span class="token type">Person</span><span class="token operator">&gt;</span><span class="token punctuation">({</span> <span class="token variable">name</span><span class="token operator">:</span> <span class="token string">&quot;Ada&quot;</span> <span class="token punctuation">});</span></code></pre></section></div>
-<h2>HTML with embedded JavaScript and CSS</h2><div class="examples"><section><h3>light</h3><pre class="code theme-light"><code><span class="token keyword">&lt;!doctype html&gt;</span>
-<span class="token tag">&lt;style&gt;</span>
-  .greeting <span class="token punctuation">{</span> <span class="token property">color</span><span class="token punctuation">:</span> <span class="token constant">#79c0ff</span><span class="token punctuation">;</span> <span class="token property">padding</span><span class="token punctuation">:</span> <span class="token number">12px</span><span class="token punctuation">;</span> <span class="token punctuation">}</span>
-<span class="token tag">&lt;/style&gt;</span>
-<span class="token punctuation">&lt;</span><span class="token tag">p</span> <span class="token attribute">class</span><span class="token operator">=</span><span class="token string">&quot;greeting&quot;</span><span class="token punctuation">&gt;</span>Hello <span class="token constant">&amp;amp;</span> welcome<span class="token punctuation">&lt;/</span><span class="token tag">p</span><span class="token punctuation">&gt;</span>
-<span class="token tag">&lt;script&gt;</span>
-  <span class="token keyword">const</span> <span class="token variable">message</span> <span class="token operator">=</span> <span class="token string">`Hello </span><span class="token punctuation">${</span><span class="token string">&quot;world&quot;</span><span class="token punctuation">}</span><span class="token string">!`</span><span class="token punctuation">;</span>
-  <span class="token variable">console</span><span class="token punctuation">.</span><span class="token function">log</span><span class="token punctuation">(</span><span class="token variable">message</span><span class="token punctuation">);</span>
-<span class="token tag">&lt;/script&gt;</span></code></pre></section><section><h3>dark</h3><pre class="code theme-dark"><code><span class="token keyword">&lt;!doctype html&gt;</span>
-<span class="token tag">&lt;style&gt;</span>
-  .greeting <span class="token punctuation">{</span> <span class="token property">color</span><span class="token punctuation">:</span> <span class="token constant">#79c0ff</span><span class="token punctuation">;</span> <span class="token property">padding</span><span class="token punctuation">:</span> <span class="token number">12px</span><span class="token punctuation">;</span> <span class="token punctuation">}</span>
-<span class="token tag">&lt;/style&gt;</span>
-<span class="token punctuation">&lt;</span><span class="token tag">p</span> <span class="token attribute">class</span><span class="token operator">=</span><span class="token string">&quot;greeting&quot;</span><span class="token punctuation">&gt;</span>Hello <span class="token constant">&amp;amp;</span> welcome<span class="token punctuation">&lt;/</span><span class="token tag">p</span><span class="token punctuation">&gt;</span>
-<span class="token tag">&lt;script&gt;</span>
-  <span class="token keyword">const</span> <span class="token variable">message</span> <span class="token operator">=</span> <span class="token string">`Hello </span><span class="token punctuation">${</span><span class="token string">&quot;world&quot;</span><span class="token punctuation">}</span><span class="token string">!`</span><span class="token punctuation">;</span>
-  <span class="token variable">console</span><span class="token punctuation">.</span><span class="token function">log</span><span class="token punctuation">(</span><span class="token variable">message</span><span class="token punctuation">);</span>
-<span class="token tag">&lt;/script&gt;</span></code></pre></section></div>
-<p>This is lexical highlighting, not syntax validation or semantic analysis.</p>
+const editor = maiden.init({
+  element: document.getElementById('editor'),
+  preview: { render }
+});
+editor.element.querySelector('.lightmarkdown-preview')
+  .classList.add('polish', 'theme-dark');</code></pre>
+  <p>Load each library separately. MeltDown owns code-block wrappers; poliSH returns their highlighted contents. Themes change with CSS classes, without highlighting again. See the <a href="markdown.html">MaiDEn example</a> for the complete workflow.</p>
+  <h2>Focused tools, flexible output</h2>
+  <p>Language aliases such as <code>js</code>, <code>py</code>, and <code>sh</code> work directly. Unlabelled code uses conservative guessing among registered languages; unknown explicit labels stay plain. Set <code>guessLanguage: false</code> to disable guessing.</p>
+  <p>Use <code>ansi</code> to convert actual terminal escape sequences, or use the token and terminal-output APIs in Node.js. ANSI colors work in standalone output; MaiDEn keeps inline styles filtered. Use a maintained HTML sanitizer for untrusted documents, and keep grammars and scanner callbacks application-controlled.</p>
+</main>
+<script src="../dist/polish.js"></script>
+<script src="../examples/code-blocks.js"></script>
+<script src="../examples/polish-playground.js"></script>
 </body>
 </html>

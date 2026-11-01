@@ -13,6 +13,7 @@ const { headingChecks } = require("./markdown-headings");
 const { formattingChecks } = require("./markdown-formatting");
 const { codeChecks } = require("./markdown-code");
 const { codeBackgroundChecks } = require("./markdown-code-background");
+const { painterChecks } = require("./markdown-painter");
 const { toolbarGroupChecks } = require("./toolbar-groups");
 const { substantialChecks } = require("./substantial");
 const { writingChecks } = require("./markdown-writing");
@@ -25,11 +26,13 @@ const { tableChecks } = require("./markdown-tables");
 const { tableRowChecks } = require("./markdown-table-rows");
 const { tableColumnChecks } = require("./markdown-table-columns");
 const { tableAlignmentChecks } = require("./markdown-table-alignment");
+const { tableFormatChecks } = require("./markdown-table-format");
 const { tablePickerChecks } = require("./markdown-table-picker");
 const { statusChecks } = require("./markdown-status");
 const { guideChecks } = require("./markdown-guide");
 const { previewChecks } = require("./markdown-preview");
 const { meltdownChecks } = require("./markdown-meltdown");
+const { polishChecks } = require('./markdown-polish');
 const { fullscreenChecks } = require("./markdown-fullscreen");
 const { splitChecks } = require("./markdown-split");
 const ROOT = path.resolve(__dirname, "..");
@@ -85,7 +88,7 @@ async function runMarkdownSmoke(page) {
     ["metal", "Code Block", "```\nmetal\n```"],
     ["", "Link", "[link](https://www.example.com)"],
     ["", "Image", "![image](https://www.example.com/image.png)"],
-    ["", "Table", "| Column 1 | Column 2 |\n| --- | --- |\n|  |  |"],
+    ["", "Table", "| Column 1 | Column 2 |\n| -------- | -------- |\n|          |          |"],
     ["- metal", "Link", "- metal[link](https://www.example.com)"],
     ["1.", "Link", "1. [link](https://www.example.com)"]
   ]) {
@@ -98,7 +101,10 @@ async function runMarkdownSmoke(page) {
       api.content.dispatchEvent(new Event("focus"));
     }, { text, title });
     await toolbar.getByRole("button", { name: title, exact: true }).click();
-    if (title === "Table") await page.locator(".lightmarkdown-table-picker").getByRole("button", { name: "2 columns, 2 rows", exact: true }).click();
+    if (title === "Table") {
+      await page.getByRole("menuitem", { name: "Insert Table…", exact: true }).click();
+      await page.locator(".lightmarkdown-table-picker").getByRole("button", { name: "2 columns, 2 rows", exact: true }).click();
+    }
     assert.equal(await page.evaluate(() => __markdownEditor.getMarkdown()), expected);
     if (title === "Code Block") {
       assert.equal(await toolbar.getByRole("button", { name: title, exact: true }).getAttribute("aria-pressed"), "true");
@@ -109,6 +115,16 @@ async function runMarkdownSmoke(page) {
     if (title === "Link" || title === "Image") assert.equal(await page.evaluate(() => getSelection().toString()),
       title === "Image" ? "https://www.example.com/image.png" : "https://www.example.com");
   }
+  await page.evaluate(() => {
+    const api = __markdownEditor; api.setMarkdown('A|B\n---|---\none|two');
+    const range = document.createRange(); range.setStart(api.content.children[2].firstChild, 0); range.setEnd(api.content.children[2].firstChild, 3);
+    api.content.focus(); getSelection().removeAllRanges(); getSelection().addRange(range); api.content.dispatchEvent(new Event('focus'));
+  });
+  await toolbar.getByRole('button', { name: 'Table', exact: true }).click();
+  await page.getByRole('menuitem', { name: 'Format Table', exact: true }).click();
+  assert.equal(await page.evaluate(() => __markdownEditor.getMarkdown()), '| A   | B   |\n| --- | --- |\n| one | two |');
+  assert.equal(await page.evaluate(() => getSelection().toString()), 'one');
+  await page.keyboard.press('Control+z'); assert.equal(await page.evaluate(() => __markdownEditor.getMarkdown()), 'A|B\n---|---\none|two');
   await page.evaluate(() => {
     const api = __markdownEditor; api.setMarkdown('> - ![alt](<package image.png> "title")');
     const range = document.createRange(); range.setStart(api.content.firstChild.firstChild, 7); range.collapse(true);
@@ -193,41 +209,43 @@ async function runMarkdownSmoke(page) {
     const range = document.createRange(); range.selectNodeContents(api.content); range.collapse(false);
     api.content.focus(); getSelection().removeAllRanges(); getSelection().addRange(range);
     const button = host.querySelector('button[aria-label="Table"]'); button.click();
+    host.querySelector('.lightmarkdown-table-menu [role="menuitem"]').click();
     const pickerNoEdit = api.getMarkdown() === "" && changes === 0 && !host.querySelector(".lightmarkdown-table-picker").hidden;
     host.querySelector('.lightmarkdown-table-picker [data-row="2"][data-column="2"]').click();
     const result = { text: api.getMarkdown(), selected: getSelection().toString(), changes, pickerNoEdit,
       pressed: button.getAttribute("aria-pressed"), shortcut: button.getAttribute("aria-keyshortcuts"), noGrid: !host.querySelector("table") };
     const add = host.querySelector('button[aria-label="Add Row After"]'), remove = host.querySelector('button[aria-label="Delete Row"]');
     add.click(); result.rowsAdded = api.getMarkdown(); remove.click(); result.rowRestored = api.getMarkdown() === result.text;
-    remove.click(); result.headerOnly = api.getMarkdown(); add.click(); result.rebuilt = api.getMarkdown() === result.text;
+    remove.click(); result.headerOnly = api.getMarkdown(); add.click(); result.rebuilt = api.getMarkdown();
     result.rowChanges = changes - result.changes;
     result.rowPressed = [add, remove].map(button => button.getAttribute("aria-pressed"));
     const columnAdd = host.querySelector('button[aria-label="Add Column After"]'), columnDelete = host.querySelector('button[aria-label="Delete Column"]');
-    columnAdd.click(); result.columnAdded = api.getMarkdown(); columnDelete.click(); result.columnRestored = api.getMarkdown() === result.text;
+    columnAdd.click(); result.columnAdded = api.getMarkdown(); columnDelete.click(); result.columnRestored = api.getMarkdown() === result.rebuilt;
     result.columnChanges = changes - result.changes - result.rowChanges;
     result.columnPressed = [columnAdd, columnDelete].map(button => button.getAttribute("aria-pressed"));
     const align = ["Align Column Left", "Center Column", "Align Column Right", "Clear Column Alignment"].map(title => host.querySelector(`button[aria-label="${title}"]`));
     align[0].click(); align[2].click(); align[1].click(); result.aligned = api.getMarkdown();
     result.alignmentPressed = align.map(button => button.getAttribute("aria-pressed"));
     const beforeNoop = changes; align[1].click(); result.alignmentNoop = changes === beforeNoop;
-    align[3].click(); result.alignmentRestored = api.getMarkdown() === result.text;
+    align[3].click(); result.alignmentRestored = api.getMarkdown() === result.rebuilt;
     result.alignmentChanges = changes - result.changes - result.rowChanges - result.columnChanges;
     result.clearedPressed = align[3].getAttribute("aria-pressed");
     api.setMarkdown(""); const beforeSized = changes; button.click();
+    host.querySelector('.lightmarkdown-table-menu [role="menuitem"]').click();
     const picker = host.querySelector(".lightmarkdown-table-picker"), fields = picker.querySelectorAll('input[type="number"]');
     fields[0].value = "4"; fields[1].value = "1"; picker.querySelector("form").requestSubmit();
     result.sized = api.getMarkdown(); result.sizedChanges = changes - beforeSized; result.sizedSelected = getSelection().toString();
     api.setMarkdown(result.text); result.reloaded = api.getMarkdown() === result.text;
     api.destroy(); host.remove(); return result;
-  }), { text: "| Column 1 | Column 2 |\n| --- | --- |\n|  |  |", selected: "Column 1", changes: 1, pickerNoEdit: true,
+  }), { text: "| Column 1 | Column 2 |\n| -------- | -------- |\n|          |          |", selected: "Column 1", changes: 1, pickerNoEdit: true,
     pressed: null, shortcut: null, noGrid: true, reloaded: true,
-    rowsAdded: "| Column 1 | Column 2 |\n| --- | --- |\n|  |  |\n|  |  |", rowRestored: true,
-    headerOnly: "| Column 1 | Column 2 |\n| --- | --- |", rebuilt: true, rowChanges: 4, rowPressed: [null, null],
-    columnAdded: "| Column 1 | Column | Column 2 |\n| --- | --- | --- |\n|  |  |  |", columnRestored: true,
+    rowsAdded: "| Column 1 | Column 2 |\n| -------- | -------- |\n|  |  |\n|          |          |", rowRestored: true,
+    headerOnly: "| Column 1 | Column 2 |\n| -------- | -------- |", rebuilt: "| Column 1 | Column 2 |\n| -------- | -------- |\n|  |  |", rowChanges: 4, rowPressed: [null, null],
+    columnAdded: "| Column 1 | Column | Column 2 |\n| -------- | --- | -------- |\n|  |  |  |", columnRestored: true,
     columnChanges: 2, columnPressed: [null, null],
-    aligned: "| Column 1 | Column 2 |\n| --- | :---: |\n|  |  |", alignmentPressed: ["false", "true", "false", "false"],
+    aligned: "| Column 1 | Column 2 |\n| -------- | :--------: |\n|  |  |", alignmentPressed: ["false", "true", "false", "false"],
     alignmentNoop: true, alignmentRestored: true, alignmentChanges: 4, clearedPressed: "true",
-    sized: "| Column 1 | Column 2 | Column 3 | Column 4 |\n| --- | --- | --- | --- |", sizedChanges: 1, sizedSelected: "Column 1" });
+    sized: "| Column 1 | Column 2 | Column 3 | Column 4 |\n| -------- | -------- | -------- | -------- |", sizedChanges: 1, sizedSelected: "Column 1" });
   await page.evaluate(() => {
     const api = __markdownEditor; api.setMarkdown("package");
     const range = document.createRange(); range.selectNodeContents(api.content); range.collapse(false);
@@ -539,94 +557,12 @@ async function demoChecks(browser, base, name) {
   for (const url of [base + "/examples/markdown.html", pathToFileURL(path.join(ROOT, "examples/markdown.html")).href]) {
     await page.goto(url); await page.waitForFunction(() => window.__markdownEditor);
     assert.equal(await page.evaluate(() => __markdownEditor.getMarkdown()), initial);
+    assert.equal(await page.locator('iframe, #editing-mode').count(), 0);
+    assert.equal(await page.evaluate(() => __markdownEditor.content.ownerDocument === document &&
+      __markdownEditor.element.contains(__markdownEditor.content)), true);
   }
   assert.deepEqual(errors, []); await page.close();
   console.log(`${name}: Markdown demo, shared skin, desktop/mobile geometry, plain output and HTTP/file routes: ok`);
-}
-
-async function isolatedDemoChecks(browser, base, name) {
-  const page = await browser.newPage({ viewport: { width: 1200, height: 900 } });
-  const errors = [], remote = [];
-  page.on("pageerror", error => errors.push(error.message));
-  page.on("request", request => {
-    if (/^https?:/.test(request.url()) && new URL(request.url()).origin !== new URL(base).origin) remote.push(request.url());
-  });
-  await page.goto(base + "/markdown.html");
-  await page.waitForFunction(() => window.__markdownEditor);
-  assert.equal(await page.evaluate(() => __markdownMode), "native");
-  const sample = "## Kept 🦊\n\nLocal **Markdown**.\n";
-  await page.evaluate(text => __markdownEditor.setMarkdown(text), sample);
-  await page.selectOption("#editing-mode", "isolated");
-  await page.waitForFunction(() => window.__markdownEditor && __markdownMode === "isolated");
-  assert.equal(await page.evaluate(() => __markdownError), null);
-  assert.equal(await page.evaluate(() => __markdownEditor.getMarkdown()), sample);
-  assert.equal(await page.locator("#raw").textContent(), sample);
-  assert.equal(await page.evaluate(() => __markdownEditor.element === document.getElementById("markdown-editor")), true);
-  assert.equal(await page.evaluate(() => __markdownEditor.content.ownerDocument !== document), true);
-  assert.equal(await page.evaluate(() => __markdownEditor.content.contentEditable), "plaintext-only");
-  await page.evaluate(() => {
-    const node = __markdownEditor.content, doc = node.ownerDocument, range = doc.createRange();
-    range.setStart(node.lastElementChild, 0); range.collapse(true); node.focus();
-    doc.getSelection().removeAllRanges(); doc.getSelection().addRange(range);
-  });
-  await page.keyboard.type("edit");
-  await page.locator("#history-demo summary").click();
-  await page.locator("#history-note").focus(); await page.keyboard.press("End"); await page.keyboard.type(" note");
-  const toolbar = page.locator('#markdown-editor > [role="group"]');
-  await toolbar.getByRole("button", { name: "Undo", exact: true }).click();
-  assert.equal(await page.evaluate(() => __markdownEditor.getMarkdown()), sample);
-  assert.equal(await page.locator("#history-note").inputValue(), "An unrelated application field. note");
-  await toolbar.getByRole("button", { name: "Redo", exact: true }).click();
-  assert.equal(await page.evaluate(() => __markdownEditor.getMarkdown()), sample + "edit");
-  await page.selectOption("#skin", "frost"); await page.selectOption("#palette", "dark");
-  await page.setViewportSize({ width: 390, height: 844 });
-  const geometry = await page.evaluate(() => {
-    const node = __markdownEditor.content, win = node.ownerDocument.defaultView;
-    const blocks = [...node.previousElementSibling.children].filter(child => !child.hidden).map(child => child.firstElementChild);
-    return { deltas: [...node.children].map((child, index) => {
-      const a = child.getBoundingClientRect(), b = blocks[index].getBoundingClientRect();
-      return Math.max(Math.abs(a.x - b.x), Math.abs(a.y - b.y), Math.abs(a.width - b.width), Math.abs(a.height - b.height));
-    }), parent: getComputedStyle(__markdownEditor.element).getPropertyValue("--lightmetal-bg"),
-      child: win.getComputedStyle(node.closest(".lightmarkdown")).getPropertyValue("--lightmetal-bg") };
-  });
-  assert.ok(geometry.deltas.every(value => value < 1), JSON.stringify(geometry));
-  assert.equal(geometry.parent.trim(), geometry.child.trim());
-  assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
-  await page.check("#native");
-  await page.waitForFunction(() => {
-    const node = __markdownEditor.content;
-    return node.ownerDocument.defaultView.getComputedStyle(node.previousElementSibling).visibility === "hidden";
-  });
-  await page.uncheck("#native");
-  await page.evaluate(() => __markdownEditor.content.dispatchEvent(new Event("compositionstart", { bubbles: true })));
-  await page.selectOption("#editing-mode", "native");
-  assert.equal(await page.locator("#editing-mode").inputValue(), "isolated");
-  assert.match(await page.locator("#mode-status").textContent(), /Finish the current composition/);
-  await page.evaluate(() => __markdownEditor.content.dispatchEvent(new Event("compositionend", { bubbles: true })));
-  await page.selectOption("#editing-mode", "native");
-  await page.waitForFunction(() => window.__markdownEditor && __markdownMode === "native");
-  assert.equal(await page.evaluate(() => __markdownEditor.getMarkdown()), sample + "edit");
-  assert.equal(await page.locator("#markdown-editor iframe").count(), 0);
-  assert.equal(await toolbar.count(), 1);
-  // A missing child bundle must fall back without losing the saved document.
-  await page.route("**/dist/maiden.js", route => route.abort());
-  await page.selectOption("#editing-mode", "isolated");
-  await page.waitForFunction(() => window.__markdownEditor && __markdownMode === "native" && __markdownError);
-  assert.equal(await page.evaluate(() => __markdownEditor.getMarkdown()), sample + "edit");
-  assert.match(await page.locator("#mode-status").textContent(), /could not start/);
-  assert.equal(await page.locator("#editing-mode").isEnabled(), true);
-  assert.equal(await page.locator("#markdown-editor iframe").count(), 0);
-  assert.equal(await toolbar.count(), 1);
-  await page.unroute("**/dist/maiden.js");
-  for (const url of [base + "/examples/markdown.html?mode=isolated", pathToFileURL(path.join(ROOT, "examples/markdown.html")).href + "?mode=isolated"]) {
-    await page.goto(url);
-    await page.waitForFunction(() => window.__markdownEditor && __markdownMode === "isolated");
-    assert.equal(await page.evaluate(() => __markdownError), null);
-    assert.equal(await page.evaluate(() => __markdownEditor.getMarkdown() === initialMarkdown), true);
-  }
-  assert.deepEqual(errors, []); assert.deepEqual(remote, []);
-  await page.close();
-  console.log(`${name}: isolated demo, mode/text round trips, separate application undo, theme/mobile geometry, composition, load fallback and nested/file routes: ok`);
 }
 
 async function iframeExampleChecks(browser, base, name) {
@@ -648,6 +584,14 @@ async function iframeExampleChecks(browser, base, name) {
     const sample = await get();
     assert.equal(await page.locator("#frame-output").textContent(), sample);
     const view = page.frameLocator("#isolated-editor");
+    await view.locator('body').evaluate(() => {
+      const before = document.createElement('button'); before.id = 'frame-entry-before'; before.textContent = 'Before editor';
+      __markdownEditor.element.before(before);
+    });
+    await view.locator('#frame-entry-before').focus(); await page.keyboard.press('Tab');
+    assert.deepEqual(await view.locator('.lightmarkdown-input').evaluate(node => ({ source: node === document.activeElement, tag: document.activeElement.tagName, label: document.activeElement.getAttribute('aria-label') })), { source: true, tag: 'DIV', label: 'Markdown source' }, 'Frame-owned Tab entry starts in source');
+    await page.keyboard.press('Escape'); await page.keyboard.press('Shift+Tab');
+    assert.equal(await view.getByRole('group', { name: 'Markdown formatting' }).locator('button:enabled').last().evaluate(node => node === document.activeElement), true);
     await view.locator(".lightmarkdown-input").evaluate(node => {
       const text = node.lastElementChild.firstChild, doc = node.ownerDocument, range = doc.createRange();
       range.setStart(text, text.length); range.collapse(true); node.focus();
@@ -663,27 +607,73 @@ async function iframeExampleChecks(browser, base, name) {
     await page.locator("#load-markdown").click();
     assert.equal(await get(), "## Loaded by the parent\n\nStill plain **Markdown**. 🦊\n");
     assert.equal(await page.locator("#frame-output").textContent(), await get());
+
+    const source = view.getByRole("textbox", { name: "Markdown source" });
+    const guide = view.getByRole("dialog", { name: "Markdown quick start" });
+    await source.focus();
+    await view.getByRole("button", { name: "Help", exact: true }).click();
+    assert.equal(await guide.evaluate(node => node.ownerDocument === document &&
+      node.contains(document.activeElement)), true, "Help stays in the editing document");
+    await page.keyboard.press("Escape"); await guide.waitFor({ state: "hidden" });
+    assert.equal(await source.evaluate(node => node === document.activeElement), true);
+    assert.equal(await get(), "## Loaded by the parent\n\nStill plain **Markdown**. 🦊\n");
+
+    await view.locator("body").evaluate(() => {
+      __markdownEditor.setMarkdown(""); __markdownEditor.content.focus();
+      const range = document.createRange(); range.selectNodeContents(__markdownEditor.content); range.collapse(true);
+      getSelection().removeAllRanges(); getSelection().addRange(range);
+      const outside = document.createElement("button"); outside.id = "frame-picker-outside"; outside.textContent = "Outside picker";
+      document.body.append(outside);
+    });
+    const table = view.getByRole("button", { name: "Table", exact: true });
+    const picker = view.getByRole("dialog", { name: "Insert table", exact: true });
+    const openPicker = async () => {
+      await table.click();
+      await view.getByRole("menuitem", { name: "Insert Table…", exact: true }).click();
+      assert.equal(await picker.isVisible(), true);
+      assert.equal(await picker.evaluate(node => node.ownerDocument === document &&
+        node.contains(document.activeElement)), true, "Picker stays in the editing document");
+    };
+    await openPicker(); await page.keyboard.press("Escape");
+    assert.equal(await picker.count(), 0);
+    assert.equal(await table.evaluate(node => node === document.activeElement), true);
+    await openPicker(); await view.locator("#frame-picker-outside").click();
+    assert.equal(await picker.count(), 0, "Frame-owned outside clicks close the picker");
+    assert.equal(await get(), "");
+    await openPicker();
+    await picker.getByRole("button", { name: "2 columns, 1 rows", exact: true }).click();
+    assert.equal(await get(), "| Column 1 | Column 2 |\n| -------- | -------- |");
+    await page.keyboard.press("Control+z"); assert.equal(await get(), "");
+    await openPicker();
+    assert.equal(await picker.evaluate(node => {
+      node.style.left = "-123px";
+      __markdownEditor.content.dispatchEvent(new Event("scroll", { bubbles: false }));
+      return node.style.left !== "-123px";
+    }), true, "The document capture listener repositions the picker on non-bubbling host scroll");
     await page.setViewportSize({ width: 390, height: 844 });
+    await page.waitForFunction(() => {
+      const frame = document.getElementById("isolated-editor").contentWindow;
+      return frame.document.querySelector(".lightmarkdown-table-picker").style.maxWidth === Math.max(0, frame.innerWidth - 16) + "px";
+    });
+    assert.equal(await picker.evaluate(node => {
+      const rect = node.getBoundingClientRect();
+      return rect.left >= 0 && rect.right <= innerWidth + 1 && rect.top >= 0 && rect.bottom <= innerHeight + 1;
+    }), true);
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
     assert.equal(await view.locator("body").evaluate(node => node.ownerDocument.documentElement.scrollWidth <= innerWidth), true);
+    await page.keyboard.press("Escape");
+    await view.getByRole("button", { name: "Help", exact: true }).click();
+    await view.locator("body").evaluate(() => __markdownEditor.destroy());
+    assert.equal(await guide.count(), 0); assert.equal(await picker.count(), 0);
+    await view.locator("body").evaluate(() => {
+      document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+      document.body.dispatchEvent(new Event("scroll")); window.dispatchEvent(new Event("resize"));
+      document.getElementById("frame-picker-outside").click();
+    });
   }
   assert.deepEqual(errors, []); assert.deepEqual(remote, []);
   await page.close();
-  console.log(`${name}: whole-editor iframe, frame-owned API, independent undo, parent read/set/events, narrow layout and HTTP/nested/file routes: ok`);
-}
-
-async function nativeFrameHistoryChecks(browser, base, name) {
-  const page = await browser.newPage();
-  try {
-    await page.goto(base + "/tests/fixtures/native-frame-history.html");
-    const child = page.frameLocator("iframe").locator("#source");
-    await child.click(); await page.keyboard.press("End"); await page.keyboard.type(" edit");
-    await page.locator("#note").focus(); await page.keyboard.press("End"); await page.keyboard.type(" note");
-    await child.click(); await page.keyboard.press("Control+z");
-    const actual = { parent: await page.locator("#note").inputValue(), child: await child.textContent() };
-    assert.deepEqual(actual, { parent: "parent note", child: "child" }, `${name}: independent iframe history, with no editor library`);
-    console.log(`${name}: native iframe history stays separate from parent edits: ok`);
-  } finally { await page.close(); }
+  console.log(`${name}: whole-editor iframe, frame-owned API/dialogs/events, independent undo, picker cancel/resize/teardown, narrow layout and HTTP/nested/file routes: ok`);
 }
 
 async function main() {
@@ -704,7 +694,7 @@ async function main() {
     for (const [name, engine] of Object.entries(engines)) {
       const browser = await engine.launch();
       try {
-        for (const check of [nativeFrameHistoryChecks, checks, headingChecks, formattingChecks, codeChecks, codeBackgroundChecks, toolbarGroupChecks, substantialChecks, writingChecks, indentationChecks, ruleChecks, shortcutChecks, stateChecks, imageChecks, tableChecks, tableRowChecks, tableColumnChecks, tableAlignmentChecks, tablePickerChecks, statusChecks, guideChecks, previewChecks, meltdownChecks, fullscreenChecks, splitChecks, reviewChecks, demoChecks, isolatedDemoChecks, iframeExampleChecks]) {
+        for (const check of [checks, headingChecks, formattingChecks, codeChecks, codeBackgroundChecks, painterChecks, toolbarGroupChecks, substantialChecks, writingChecks, indentationChecks, ruleChecks, shortcutChecks, stateChecks, imageChecks, tableChecks, tableRowChecks, tableColumnChecks, tableAlignmentChecks, tableFormatChecks, tablePickerChecks, statusChecks, guideChecks, previewChecks, meltdownChecks, polishChecks, fullscreenChecks, splitChecks, reviewChecks, demoChecks, iframeExampleChecks]) {
           const checkStarted = performance.now();
           try { await check(browser, base, name, options); }
           catch (error) { console.error(`${name}/${check.name}: ${error.message}`); failures.push(error); }
@@ -717,5 +707,5 @@ async function main() {
   if (failures.length) throw new AggregateError(failures, `${failures.length} Markdown check groups failed`);
 }
 
-module.exports = { runMarkdownSmoke, demoChecks, isolatedDemoChecks, iframeExampleChecks };
+module.exports = { runMarkdownSmoke, demoChecks, iframeExampleChecks };
 if (require.main === module) main().catch(error => { console.error(error); process.exitCode = 1; });

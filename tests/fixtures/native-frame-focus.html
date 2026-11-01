@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Native iframe focus and input routing</title></head>
+<body>
+  <h1>Native iframe focus and input routing</h1>
+  <p>No editor library. The child buttons only focus its editable div and call
+    native Undo or Redo. This fixture isolates browser/runtime behavior.</p>
+  <label>Parent field <textarea id="note">parent</textarea></label>
+  <iframe title="Native child editor" srcdoc="
+    <button id='undo' onclick=&quot;document.getElementById('source').focus();document.execCommand('undo')&quot;>Undo</button>
+    <button id='redo' onclick=&quot;document.getElementById('source').focus();document.execCommand('redo')&quot;>Redo</button>
+    <div id='source' contenteditable='true' role='textbox' aria-label='Child field'>child</div>
+  "></iframe>
+  <button id="after" type="button">After the iframe</button>
+  <p>Tab from the child field should reach the button after the frame.
+    Shift+Tab from the child Undo button should reach the parent field.</p>
+  <p>The automated history case types in the child, uses its Undo and Redo,
+    fills the parent field, then returns to the child for Ctrl+Z. Input and
+    history must stay with the focused document. See
+    <code>tests/native-frame-focus.js</code> for the exact sequence.</p>
+</body>
+</html>

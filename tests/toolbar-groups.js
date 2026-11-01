@@ -15,7 +15,7 @@ async function toolbarGroupChecks(browser, base, name) {
     assert.equal(await html.getByRole('separator').count(), 5);
     const order = bar => bar.locator(':scope > *').evaluateAll(nodes => nodes.filter(node => node.tagName === 'BUTTON' || node.getAttribute('role') === 'separator').map(node => node.getAttribute('role') === 'separator' ? '|' : node.getAttribute('aria-label')));
     assert.deepEqual(await order(markdown), ['Bold','Italic','Strike-through','|','Heading 1','Heading 2','Paragraph','|','Quote','Unordered List','Ordered List','|','Inline Code','Code Block','|','Horizontal Line','Link','Image','Table','|','Undo','Redo','|','Fullscreen','Help']);
-    assert.deepEqual(await order(html), ['Bold','Italic','Underline','Strike-through','|','Heading 1','Heading 2','Paragraph','|','Quote','Ordered List','Unordered List','|','Code','|','Horizontal Line','Link','Insert table','Image','|','Source']);
+    assert.deepEqual(await order(html), ['Bold','Italic','Underline','Strike-through','|','Heading 1','Heading 2','Paragraph','|','Quote','Ordered List','Unordered List','|','Code','|','Horizontal Line','Link','Table','Image','|','Source']);
     for (const bar of [markdown, html]) {
       for (const separator of await bar.getByRole('separator').all()) {
         assert.equal(await separator.getAttribute('aria-orientation'), 'vertical');
@@ -28,6 +28,29 @@ async function toolbarGroupChecks(browser, base, name) {
     await page.waitForFunction(() => document.querySelectorAll('#editor .lightmetal-toolbar-separator:not([hidden])').length === 4);
     await markdown.evaluate(bar => { for (const button of bar.querySelectorAll('button')) button.hidden = false; });
     await page.waitForFunction(() => document.querySelectorAll('#editor .lightmetal-toolbar-separator:not([hidden])').length === 6);
+    await page.addStyleTag({ content: `
+      .lightmetal-actionbar > button:is([aria-label="Bold"], [aria-label="Italic"], [aria-label="Underline"], [aria-label="Strike-through"]) { display: var(--test-format-display, inline-flex); }
+      .lightmetal-actionbar.test-hide-formatting > button:is([aria-label="Bold"], [aria-label="Italic"], [aria-label="Underline"], [aria-label="Strike-through"]) { display: none; }
+    ` });
+    for (const [bar, count] of [[markdown, 6], [html, 5]]) {
+      for (const mode of ['class', 'style']) {
+        const firstDividerHidden = await bar.evaluate(async (bar, mode) => {
+          if (mode === 'class') bar.classList.add('test-hide-formatting');
+          else bar.style.setProperty('--test-format-display', 'none');
+          // MutationObserver callbacks run before this continuation.
+          await Promise.resolve();
+          return bar.querySelector('[role="separator"]').hidden;
+        }, mode);
+        assert.equal(firstDividerHidden, true, mode + ': hiding the first group removes its leading divider');
+        assert.equal(await bar.getByRole('separator').count(), count - 1);
+        await bar.evaluate(async bar => {
+          bar.classList.remove('test-hide-formatting');
+          bar.style.removeProperty('--test-format-display');
+          await Promise.resolve();
+        });
+        assert.equal(await bar.getByRole('separator').count(), count, mode + ': showing the first group restores its divider');
+      }
+    }
     for (const skin of ['', 'bootstrap', 'material-classic', 'material-outline', 'frost', 'patina', 'sterling', 'substantial']) {
       if (skin) await page.addStyleTag({ url: base + '/dist/skins/' + skin + '.css' });
       await page.evaluate(skin => { for (const id of ['editor', 'html-groups']) { const host = document.getElementById(id); for (const name of ['bootstrap','material-classic','material-outline','frost','patina','sterling','substantial']) host.classList.toggle('lightmetal-' + name, name === skin); } }, skin);
@@ -40,11 +63,21 @@ async function toolbarGroupChecks(browser, base, name) {
         assert.ok(Math.max(...positions) - Math.min(...positions) < 2, 'controls stay on one scrollable row');
       }
     }
-    await page.evaluate(() => {
+    const retiredDividers = await page.evaluate(async () => {
+      const retired = [...document.querySelectorAll('.lightmetal-actionbar')];
       __markdownEditor.destroy(); __htmlGroups.destroy();
+      for (const bar of retired) {
+        for (const button of bar.querySelectorAll('button')) {
+          if (['Bold', 'Italic', 'Underline', 'Strike-through'].includes(button.getAttribute('aria-label'))) button.hidden = true;
+        }
+      }
+      await Promise.resolve();
+      const hidden = retired.map(bar => bar.querySelector('[role="separator"]').hidden);
       window.__markdownEditor = __initMarkdown({ element: document.getElementById('editor'), actions: ['bold','heading1','image'] });
       window.__htmlGroups = lightmetal.init({ element: document.getElementById('html-groups'), actions: ['bold','heading1','image'] });
+      return hidden;
     });
+    assert.deepEqual(retiredDividers, [false, false], 'destroyed toolbars no longer observe button mutations');
     assert.equal(await markdown.getByRole('separator').count(), 0, 'explicit action lists stay unchanged');
     assert.equal(await html.getByRole('separator').count(), 0);
     await page.evaluate(() => { __markdownEditor.destroy(); __htmlGroups.destroy(); });

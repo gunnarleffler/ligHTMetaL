@@ -17,11 +17,11 @@ const cases = [
   ['quote in list', '- a\n  > quoted', '<ul><li>a\n<blockquote><p>quoted</p></blockquote></li></ul>'],
   ['list in quote', '> - a\n>   1. b', '<blockquote><ul><li>a\n<ol><li>b</li></ol></li></ul></blockquote>'],
   ['quote code isolation', '> ```\n> > not a quote\n> ```', '<blockquote><pre><code>&gt; not a quote</code></pre></blockquote>'],
-  ['indented heading', '   ## title', '<h2>title</h2>'],
+  ['indented heading', '   ## title', '<h2 id="title">title</h2>'],
   ['indented unordered list', '  - a\n  - b', '<ul><li>a</li><li>b</li></ul>'],
-  ['setext headings', 'Title\n===\n\nSubtitle\n---', '<h1>Title</h1>\n<h2>Subtitle</h2>'],
-  ['setext with inline markup', '**Title**\n===', '<h1><strong>Title</strong></h1>'],
-  ['table versus setext precedence', 'a | b\n---', '<h2>a | b</h2>'],
+  ['setext headings', 'Title\n===\n\nSubtitle\n---', '<h1 id="title">Title</h1>\n<h2 id="subtitle">Subtitle</h2>'],
+  ['setext with inline markup', '**Title**\n===', '<h1 id="title"><strong>Title</strong></h1>'],
+  ['table versus setext precedence', 'a | b\n---', '<h2 id="a--b">a | b</h2>'],
   ['horizontal rules', '---\n***\n_ _ _\n- - -', '<hr>\n<hr>\n<hr>\n<hr>'],
   ['indented code', '    <tag>\n    **literal**\n\n    &copy;', '<pre><code>&lt;tag&gt;\n**literal**\n\n&amp;copy;</code></pre>'],
   ['tab-indented code', '\tconst x = 1;\n\t\treturn x;', '<pre><code>const x = 1;\n\treturn x;</code></pre>'],
@@ -134,12 +134,12 @@ test('table splitter respects code and link boundaries', () => {
   assert.equal(parse('A | B\n--- | ---\n`a|b` | [x](./a|b)'),
     '<table><thead><tr><th>A</th><th>B</th></tr></thead><tbody>' +
     '<tr><td><code>a|b</code></td><td><a href="./a|b">x</a></td></tr></tbody></table>');
-  assert.equal(parse('`a|b`\n---'), '<h2><code>a|b</code></h2>');
+  assert.equal(parse('`a|b`\n---'), '<h2 id="ab"><code>a|b</code></h2>');
 });
 
 test('table rows stop before block openers containing pipes', () => {
   assert.equal(parse('A | B\n--- | ---\n# next | heading'),
-    '<table><thead><tr><th>A</th><th>B</th></tr></thead><tbody></tbody></table>\n<h1>next | heading</h1>');
+    '<table><thead><tr><th>A</th><th>B</th></tr></thead><tbody></tbody></table>\n<h1 id="next--heading">next | heading</h1>');
 });
 
 test('table inside a quote and inline references inside cells', () => {

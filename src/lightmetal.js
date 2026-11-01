@@ -120,7 +120,7 @@ const defaultActions = {
   // result() is replaced per instance with the editor's table workflow.
   table: {
     icon: SVG_MARKUP.table,
-    title: "Insert table",
+    title: "Table",
     result: () => true
   },
   // result() is replaced per instance with the editor's image workflow.
@@ -417,6 +417,8 @@ export const init = (settings) => {
   let formatTimer = 0;
   let pickerInput = null;
   let tableDropdown = null;
+  let tableMenu = null, tableInsertItem = null;
+  const tableMenuButtons = new Map();
   let tableTrigger = null;
   let tableRange = null;
   let tableMessage = null;
@@ -447,6 +449,8 @@ export const init = (settings) => {
 
   const actionbar = document.createElement("div");
   actionbar.className = classes.actionbar;
+  // Scrolling containers can otherwise become automatic browser Tab stops.
+  actionbar.tabIndex = -1;
 
   const tablebar = document.createElement("div");
   tablebar.className = "lightmetal-tablebar";
@@ -458,9 +462,13 @@ export const init = (settings) => {
   const content = document.createElement("div");
   content.contentEditable = "true";
   content.className = classes.content;
+  content.setAttribute("role", "textbox");
+  content.setAttribute("aria-label", "HTML content");
+  content.setAttribute("aria-multiline", "true");
 
   const source = document.createElement("textarea");
   source.className = classes.source;
+  source.setAttribute("aria-label", "HTML source");
   source.spellcheck = false;
   source.hidden = true;
 
@@ -479,7 +487,7 @@ export const init = (settings) => {
 
   const enterSource = () => {
     clearTimeout(formatTimer);
-    closeTableDropdown();
+    closeTableMenu(); closeTableDropdown();
     mode = "source";
     source.value = content.innerHTML;
     content.hidden = true;
@@ -547,10 +555,19 @@ export const init = (settings) => {
     tableRange = range && content.contains(range.commonAncestorContainer) ? range.cloneRange() : null;
   };
 
+  const closeTableMenu = (restoreFocus = false) => {
+    if (!tableMenu || tableMenu.hidden) return;
+    if (tableMenu.hasAttribute("popover") && tableMenu.matches(":popover-open")) tableMenu.hidePopover();
+    tableMenu.hidden = true;
+    tableTrigger?.setAttribute("aria-expanded", "false");
+    if (restoreFocus && !destroyed) tableTrigger?.focus();
+  };
+
   const closeTableDropdown = (restoreFocus = false) => {
     if (tableDropdown && !tableDropdown.hidden) {
       if (tableDropdown.hasAttribute("popover")) tableDropdown.hidePopover();
       tableDropdown.hidden = true;
+      tableInsertItem?.setAttribute("aria-expanded", "false");
       tableTrigger?.setAttribute("aria-expanded", "false");
       if (restoreFocus) tableTrigger?.focus();
     }
@@ -705,7 +722,7 @@ export const init = (settings) => {
     element.appendChild(tableDropdown);
   };
 
-  const tableResult = () => {
+  const openTableInsertion = () => {
     if (tableDropdown && !tableDropdown.hidden) {
       closeTableDropdown(true);
       return false;
@@ -715,8 +732,8 @@ export const init = (settings) => {
     resetTableDropdown();
     tableDropdown.hidden = false;
     if (tableDropdown.hasAttribute("popover")) tableDropdown.showPopover();
-    tableTrigger.setAttribute("aria-controls", tableDropdown.id);
-    tableTrigger.setAttribute("aria-expanded", "true");
+    tableInsertItem.setAttribute("aria-controls", tableDropdown.id);
+    tableInsertItem.setAttribute("aria-expanded", "true");
     positionTableDropdown();
     tableDropdown.querySelector('button[tabindex="0"]').focus();
     return false;
@@ -966,7 +983,7 @@ export const init = (settings) => {
   const updateTableControls = () => {
     const selection = document.getSelection();
     if (mode === "source" || destroyed) activeCell = null;
-    else if (!tablebar.contains(document.activeElement) && !actionbar.contains(document.activeElement)) {
+    else if (!tablebar.contains(document.activeElement) && !actionbar.contains(document.activeElement) && !tableMenu?.contains(document.activeElement)) {
       const range = selection?.rangeCount ? selection.getRangeAt(0) : null;
       const start = range && cellAt(range.startContainer);
       activeCell = document.activeElement === content && start &&
@@ -974,10 +991,21 @@ export const init = (settings) => {
     }
     if (activeCell && !content.contains(activeCell)) activeCell = null;
     tablebar.hidden = !activeCell;
+    if (tableMenu) {
+      const inTable = node => {
+        const el = node?.nodeType === Node.ELEMENT_NODE ? node : node?.parentElement;
+        return content.contains(el?.closest("table"));
+      };
+      tableInsertItem.disabled = mode === "source" || destroyed || !!tableRange &&
+        (inTable(tableRange.startContainer) || inTable(tableRange.endContainer));
+      for (const button of tableMenuButtons.values()) button.disabled = !activeCell;
+    }
     if (!activeCell) return;
     const info = inspectTable(activeCell.closest("table"));
     for (const [command, button] of tableButtons) {
-      button.disabled = !canEditTable(info, activeCell, command);
+      const disabled = !canEditTable(info, activeCell, command);
+      button.disabled = disabled;
+      if (tableMenuButtons.has(command)) tableMenuButtons.get(command).disabled = disabled;
     }
     tableNote.textContent = !info.columns ? "Merged or irregular table: edit its structure in Source mode." :
       info.columnGroups ? "Column groups: edit columns in Source mode." :
@@ -1103,6 +1131,68 @@ export const init = (settings) => {
   listen(document, "selectionchange", updateTableControls);
   listen(document, "focusin", updateTableControls);
 
+  const positionTableMenu = () => {
+    if (!tableMenu || tableMenu.hidden) return;
+    tableMenu.style.maxWidth = `${Math.max(0, window.innerWidth - 16)}px`;
+    tableMenu.style.maxHeight = `${Math.max(0, window.innerHeight - 16)}px`;
+    const anchor = tableTrigger.getBoundingClientRect(), popup = tableMenu.getBoundingClientRect();
+    tableMenu.style.left = `${Math.max(8, Math.min(anchor.left, window.innerWidth - popup.width - 8))}px`;
+    const below = anchor.bottom + 4;
+    tableMenu.style.top = `${below + popup.height <= window.innerHeight - 8 ? below : Math.max(8, Math.min(anchor.top - popup.height - 4, window.innerHeight - popup.height - 8))}px`;
+  };
+  const createTableMenu = () => {
+    tableMenu = document.createElement("div");
+    tableMenu.className = "lightmetal-table-dropdown lightmetal-table-menu";
+    tableMenu.id = `lightmetal-table-menu-${++tableDropdownCounter}`;
+    tableMenu.setAttribute("role", "menu"); tableMenu.setAttribute("aria-label", "Table"); tableMenu.tabIndex = -1; tableMenu.hidden = true;
+    if (typeof tableMenu.showPopover === "function") tableMenu.setAttribute("popover", "manual");
+    tableInsertItem = document.createElement("button"); tableInsertItem.type = "button"; tableInsertItem.tabIndex = -1;
+    tableInsertItem.textContent = "Insert Table…"; tableInsertItem.setAttribute("role", "menuitem");
+    tableInsertItem.setAttribute("aria-haspopup", "dialog"); tableInsertItem.setAttribute("aria-expanded", "false");
+    listen(tableInsertItem, "mousedown", event => event.preventDefault());
+    listen(tableInsertItem, "click", () => { closeTableMenu(); openTableInsertion(); });
+    tableMenu.append(tableInsertItem);
+    for (const [index, [command, label]] of tableControls.entries()) {
+      if ([0, 2, 4].includes(index)) {
+        const divider = document.createElement("div"); divider.setAttribute("role", "separator"); tableMenu.append(divider);
+      }
+      const button = document.createElement("button"); button.type = "button"; button.tabIndex = -1;
+      button.textContent = label; button.setAttribute("role", "menuitem");
+      listen(button, "mousedown", event => event.preventDefault());
+      listen(button, "click", () => { const ok = editTable(command); closeTableMenu(!ok); if (ok) content.focus(); });
+      tableMenu.append(button); tableMenuButtons.set(command, button);
+    }
+    listen(tableMenu, "keydown", event => {
+      if (event.isComposing || event.ctrlKey || event.metaKey || event.altKey) return;
+      if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); closeTableMenu(true); }
+      else if (event.key === "Tab") closeTableMenu(true);
+      else if (["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) {
+        event.preventDefault();
+        const enabled = [tableInsertItem, ...tableMenuButtons.values()].filter(button => !button.disabled), index = enabled.indexOf(document.activeElement);
+        const next = event.key === "Home" ? 0 : event.key === "End" ? enabled.length - 1 :
+          (index + (event.key === "ArrowDown" ? 1 : -1) + enabled.length) % enabled.length;
+        enabled[next]?.focus();
+      }
+    });
+    element.append(tableMenu);
+  };
+  const tableResult = (last = false) => {
+    if (tableMenu && !tableMenu.hidden) { closeTableMenu(true); return false; }
+    closeTableDropdown(); captureTableRange();
+    if (!tableMenu) createTableMenu();
+    // Capture the cell before focus moves from the toolbar into the menu.
+    const start = tableRange && cellAt(tableRange.startContainer);
+    activeCell = start && start === cellAt(tableRange.endContainer) ? start : null;
+    updateTableControls();
+    tableMenu.hidden = false;
+    if (tableMenu.hasAttribute("popover")) tableMenu.showPopover();
+    tableTrigger.setAttribute("aria-controls", tableMenu.id); tableTrigger.setAttribute("aria-expanded", "true");
+    positionTableMenu();
+    const enabled = [tableInsertItem, ...tableMenuButtons.values()].filter(button => !button.disabled);
+    (enabled[last ? enabled.length - 1 : 0] || tableMenu).focus();
+    return false;
+  };
+
   const hasSource =
     !settings.actions ||
     settings.actions.some((a) => a === "source" || (a && a.name === "source"));
@@ -1184,16 +1274,18 @@ export const init = (settings) => {
   listen(source, "input", onSourceInput);
 
   const toolbarButtons = [];
+  const buttons = [];
   actions.forEach((action, index) => {
     const button = document.createElement("button");
     button.type = "button";
+    button.tabIndex = -1;
     button.className = classes.button;
     button.innerHTML = action.icon;
     button.title = action.title;
     button.setAttribute("aria-label", action.title);
 
     if (action.result === tableResult) {
-      button.setAttribute("aria-haspopup", "dialog");
+      button.setAttribute("aria-haspopup", "menu");
       button.setAttribute("aria-expanded", "false");
       const capture = () => {
         tableTrigger = button;
@@ -1201,6 +1293,11 @@ export const init = (settings) => {
       };
       listen(button, "mousedown", capture);
       listen(button, "focus", capture);
+      listen(button, "keydown", event => {
+        if (mode !== "source" && ["ArrowDown", "ArrowUp"].includes(event.key) && !event.altKey && !event.ctrlKey && !event.metaKey) {
+          event.preventDefault(); tableTrigger = button; tableResult(event.key === "ArrowUp");
+        }
+      });
     }
 
     // In source mode only the source button acts; WYSIWYG commands must not
@@ -1215,13 +1312,19 @@ export const init = (settings) => {
     listen(button, "click", onClick);
 
     if (action.state) {
-      const update = () => button.classList.toggle(classes.selected, action.state());
+      button.setAttribute("aria-pressed", "false");
+      const update = () => {
+        const active = !!action.state();
+        button.classList.toggle(classes.selected, active);
+        button.setAttribute("aria-pressed", String(active));
+      };
       listen(content, "keyup", update);
       listen(content, "mouseup", update);
       listen(button, "click", update);
     }
 
     actionbar.appendChild(button);
+    buttons.push(button);
     if (!settings.actions) {
       const name = Object.keys(defaultActions).find(name => defaultActions[name] === resolvedActions[index]) || 'source';
       toolbarButtons.push({ button, name });
@@ -1229,7 +1332,17 @@ export const init = (settings) => {
   });
   if (!settings.actions) cleanups.push(groupToolbar(actionbar, toolbarButtons));
 
+  // Enter through the writing field; keep native toolbar traversal inside.
+  const setToolbarTabIndex = (tabIndex) => {
+    for (const button of buttons) if (button.tabIndex !== tabIndex) button.tabIndex = tabIndex;
+  };
+  listen(element, "focusin", () => setToolbarTabIndex(0));
+  listen(element, "focusout", (event) => {
+    if (!element.contains(event.relatedTarget)) setToolbarTabIndex(-1);
+  });
+
   const onTableOutsideClick = (event) => {
+    if (tableMenu && !tableMenu.hidden && !tableMenu.contains(event.target) && !tableTrigger?.contains(event.target)) closeTableMenu();
     if (tableDropdown && !tableDropdown.hidden && !tableDropdown.contains(event.target) &&
         !tableTrigger?.contains(event.target)) closeTableDropdown();
   };
@@ -1237,12 +1350,19 @@ export const init = (settings) => {
     if (event.key === "Escape" && tableDropdown && !tableDropdown.hidden) {
       event.preventDefault();
       closeTableDropdown(true);
+    } else if (event.key === "Escape" && tableMenu && !tableMenu.hidden) {
+      event.preventDefault(); closeTableMenu(true);
     }
   };
   listen(document, "pointerdown", onTableOutsideClick);
   listen(document, "keydown", onTableEscape);
   listen(window, "resize", positionTableDropdown);
   listen(window, "scroll", positionTableDropdown, true);
+  listen(window, "resize", positionTableMenu);
+  listen(window, "scroll", positionTableMenu, true);
+  listen(document, "focusin", event => {
+    if (tableMenu && !tableMenu.hidden && !tableMenu.contains(event.target) && !actionbar.contains(event.target)) closeTableMenu();
+  });
 
   element.appendChild(actionbar);
   element.appendChild(tablebar);
@@ -1255,7 +1375,7 @@ export const init = (settings) => {
   /** Replace content in either mode. Fires onChange. */
   const setHTML = (html) => {
     clearTimeout(formatTimer);
-    closeTableDropdown();
+    closeTableMenu(); closeTableDropdown();
     if (sanitized) html = sanitizeHTML(html, baseURI, images.allowBase64);
     if (mode === "source") source.value = html;
     else content.innerHTML = html;
@@ -1294,8 +1414,8 @@ export const init = (settings) => {
   const destroy = () => {
     if (destroyed) return;
     destroyed = true;
-    closeTableDropdown();
-    tableDropdown?.remove();
+    closeTableMenu(); closeTableDropdown();
+    tableMenu?.remove(); tableDropdown?.remove();
     cleanups.forEach((fn) => fn());
     actionbar.remove();
     tablebar.remove();

@@ -2,7 +2,7 @@
  * The full-toolbar iframe is a test harness, not a proposed production API.
  */
 const params = new URLSearchParams(location.search);
-const mode = ["isolated", "surface"].includes(params.get("mode")) ? params.get("mode") : "inline";
+const mode = params.get("mode") === "isolated" ? "isolated" : "inline";
 const callback = ["remove", "textarea"].includes(params.get("callback")) ? params.get("callback") : "text";
 const raw = document.createTextNode("");
 document.getElementById("raw").append(raw);
@@ -57,10 +57,8 @@ experiment.mount = async (id, options = {}) => {
     await loaded;
     scope = frame.contentWindow; element = frame.contentDocument.querySelector(".experiment-editor");
   }
-  const settings = { ...options, element: host, onChange: value => { report(id, value); options.onChange?.(value); } };
-  const api = mode === "surface"
-    ? await __initMarkdownSurface(settings, experiment.frames[id])
-    : scope.maiden.init({ ...settings, element });
+  const api = scope.maiden.init({ ...options, element,
+    onChange: value => { report(id, value); options.onChange?.(value); } });
   experiment.editors[id] = api;
   if (plaintext) api.content.contentEditable = "plaintext-only";
   api.setMarkdown("body " + id);

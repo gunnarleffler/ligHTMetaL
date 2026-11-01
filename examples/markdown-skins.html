@@ -13,6 +13,7 @@
     <link rel="stylesheet" href="../dist/skins/sterling.css">
     <link rel="stylesheet" href="../dist/skins/substantial.css">
     <link rel="stylesheet" href="../dist/maiden.css">
+    <link rel="stylesheet" href="../dist/polish.css">
     <style>
       :root {
         color-scheme: light;
@@ -74,7 +75,7 @@
       <p>Same editor, different surfaces. Original ligHTMetaL CSS, with no dependencies
         or external fonts. All icons and editing stay local.</p>
       <p>Try source formatting, Preview, Side-by-side, and Fullscreen in every skin.
-        <a href="markdown.html">Markdown editor &amp; quickstart</a> · <a href="skins.html">HTML skins</a> · <a href="index.html">All three libraries</a></p>
+        <a href="markdown.html">Markdown editor &amp; quickstart</a> · <a href="skins.html">HTML skins</a> · <a href="index.html">All four libraries</a></p>
       <p>Load shared CSS, then your chosen skin CSS, then MaiDEn CSS. Add the skin class to the editor host, such as <code>lightmetal lightmetal-substantial</code>.</p>
       <label for="palette">Color mode</label>
       <select id="palette">
@@ -86,6 +87,8 @@
     <main id="gallery"></main>
     <script src="../dist/MeltDown.js"></script>
     <script src="../dist/maiden.js"></script>
+    <script src="../dist/polish.js"></script>
+    <script src="../examples/polish-demo.js"></script>
     <script>
       const skinChoices = [
         ["default", "Default", "The existing ligHTMetaL appearance, unchanged."],
@@ -97,7 +100,7 @@
         ["sterling", "Sterling", "Compact, neutral toolbar chrome."],
         ["substantial", "Substantial", "Premium developer-tool chrome. Generous proportions, commanding presence, and frankly, a pretty substantial amount of visual equity."]
       ];
-      const sampleMarkdown = '# A place for your ideas\n\nKeep the **markers**. Keep your content your own.\n\n- Local-first writing\n- Native undo\n\n```js\nconst idea = "yours";\n```\n\n| Project | Status |\n| --- | --- |\n| MaiDEn | Ready to write |';
+      const sampleMarkdown = '# A place for your ideas\n\nSelect this text and the `inline code`, then drag into the fence below.\n\n```js\nconst idea = "yours";\nfunction write(message) {\n  return `${idea}: ${message}`;\n}\n```\n\nSelect back across this paragraph and the code above.\n\nKeep the **markers**. Keep your content your own.\n\n- Local-first writing\n- Native undo\n\n| Project | Status |\n| --- | --- |\n| MaiDEn | Ready to write |';
       window.__skinEditors = {};
       for (const [name, title, description] of skinChoices) {
         const card = document.createElement("section");
@@ -110,17 +113,14 @@
         host.className = "lightmetal" + (name === "default" ? "" : " lightmetal-" + name);
         card.append(heading, note, host);
         document.getElementById("gallery").appendChild(card);
-        const editor = maiden.init({ element: host, preview: { render: meltDown.parse } });
+        const editor = maiden.init({ element: host, preview: { render: polishDemo.render } });
         editor.setMarkdown(sampleMarkdown);
         window.__skinEditors[name] = editor;
       }
       document.getElementById("palette").addEventListener("change", (event) => {
         const mode = event.target.value;
         document.documentElement.dataset.mode = mode;
-        for (const editor of Object.values(window.__skinEditors)) {
-          editor.element.classList.toggle("lightmetal-light", mode === "light");
-          editor.element.classList.toggle("lightmetal-dark", mode === "dark");
-        }
+        document.documentElement.dataset.lightmetalTheme = mode;
       });
     </script>
   </body>

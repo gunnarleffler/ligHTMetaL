@@ -4,29 +4,11 @@
  * Load after lightmetal.css. Add lightmetal-substantial to the editor host.
  */
 .lightmetal.lightmetal-substantial {
-  --lightmetal-bg-toolbar: #f3f5f7;
-  --lightmetal-border: #c5ccd6;
-  --lightmetal-color-dim: #5f6874;
-  --lightmetal-accent: #435dc6;
-  --lightmetal-accent-soft: #e0e5f5;
-}
-
-.lightmetal.lightmetal-substantial.lightmetal-dark {
-  --lightmetal-bg-toolbar: #22262d;
-  --lightmetal-border: #424a56;
-  --lightmetal-color-dim: #9aa4b2;
-  --lightmetal-accent: #8fa0ff;
-  --lightmetal-accent-soft: #30394d;
-}
-
-@media (prefers-color-scheme: dark) {
-  .lightmetal.lightmetal-substantial:not(.lightmetal-light) {
-    --lightmetal-bg-toolbar: #22262d;
-    --lightmetal-border: #424a56;
-    --lightmetal-color-dim: #9aa4b2;
-    --lightmetal-accent: #8fa0ff;
-    --lightmetal-accent-soft: #30394d;
-  }
+  --lightmetal-bg-toolbar: light-dark(#f3f5f7, #22262d);
+  --lightmetal-border: light-dark(#c5ccd6, #424a56);
+  --lightmetal-color-dim: light-dark(#5f6874, #9aa4b2);
+  --lightmetal-accent: light-dark(#435dc6, #8fa0ff);
+  --lightmetal-accent-soft: light-dark(#e0e5f5, #30394d);
 }
 
 .lightmetal-substantial .lightmetal-actionbar {

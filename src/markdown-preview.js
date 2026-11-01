@@ -5,8 +5,9 @@
 export function paintPreview(target, source) {
   let cursor = target.firstChild;
   const hide = node => {
-    if (node.nodeType === 3) node.data = '';
-    else { node.hidden = true; for (const child of node.childNodes) hide(child); }
+    if (node.nodeType === 3) { if (node.data) node.data = ''; }
+    // Hidden spares were cleared on their first pass; leave their subtree alone.
+    else if (!node.hidden) { node.hidden = true; for (const child of node.childNodes) hide(child); }
   };
   for (const wanted of source.childNodes) {
     while (cursor && (cursor.nodeType !== wanted.nodeType || cursor.nodeName !== wanted.nodeName)) {
@@ -29,6 +30,7 @@ export function paintPreview(target, source) {
 export function previewHTML(document, html) {
   const template = document.createElement("template"); template.innerHTML = html;
   const allowed = new Set("p br hr h1 h2 h3 h4 h5 h6 strong b em i s del blockquote ul ol li pre code a table thead tbody tfoot tr th td span div dl dt dd sup sub".split(" "));
+  const tokenClasses = new Set('token plain comment keyword string number boolean constant function type variable property operator punctuation tag attribute'.split(' '));
   const blocked = new Set("script style iframe object embed svg math form input button textarea select link meta base audio video source".split(" "));
   const clean = (source, target) => {
     for (const node of source.childNodes) {
@@ -50,7 +52,8 @@ export function previewHTML(document, html) {
           }
         } catch {}
       }
-      const classes = Array.from(node.classList).filter(name => /^(?:hljs(?:-[a-z0-9_-]+)?|language-[a-z0-9_-]+)$/.test(name));
+      const classes = Array.from(node.classList).filter(name => /^(?:hljs(?:-[a-z0-9_-]+)?|language-[a-z0-9_-]+)$/.test(name) ||
+        (node.localName === 'span' && node.classList.contains('token') && tokenClasses.has(name)));
       if (["pre", "code", "span"].includes(node.localName) && classes.length) copy.className = classes.join(" ");
       clean(node, copy); target.append(copy);
     }

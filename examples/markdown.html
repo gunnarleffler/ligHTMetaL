@@ -13,7 +13,7 @@
     <link rel="stylesheet" href="../dist/skins/sterling.css">
     <link rel="stylesheet" href="../dist/skins/substantial.css">
     <link rel="stylesheet" href="../dist/maiden.css">
-    <link rel="stylesheet" href="../examples/markdown-surface.css">
+    <link rel="stylesheet" href="../dist/polish.css">
     <style>
       :root { color-scheme: light dark; }
       :root[data-mode="light"] { color-scheme: light; }
@@ -25,8 +25,7 @@
       .controls { display: flex; align-items: center; flex-wrap: wrap; gap: 12px 20px; margin: 20px 0; }
       select { max-width: 100%; font: inherit; padding: 4px; }
       .controls label { max-width: 100%; }
-      #history-note { box-sizing: border-box; display: block; width: 100%; min-height: 70px; font: inherit; }
-      #mode-status { font-size: 14px; }
+      #editor-status { font-size: 14px; }
       #raw { box-sizing: border-box; width: 100%; height: 220px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; padding: 14px; border: 1px solid; border-radius: 6px; font: 14px/1.6 ui-monospace, monospace; }
       .notice { padding: 14px 18px; border: 1px dashed currentColor; border-radius: 8px; }
       code { font-family: ui-monospace, monospace; }
@@ -39,14 +38,10 @@
       <p>The lightMarkDown Editor</p>
       <p>Markdown stays visible. Headings look like headings;
         <code>**bold**</code> looks bold. The writing area uses a local monospace font.</p>
-      <p><a href="index.html">All three libraries</a> · <a href="html.html">HTML editor</a> · <a href="markdown-skins.html">Markdown editor skins</a> ·
-        <a href="markdown-iframe.html">Simple iframe example</a></p>
+      <p><a href="index.html">All four libraries</a> · <a href="html.html">HTML editor</a> · <a href="markdown-skins.html">Markdown editor skins</a> ·
+        <a href="markdown-iframe.html">Simple iframe example</a> · <a href="polish.html">Syntax highlighter</a></p>
     </header>
     <div class="controls">
-      <label>Editing mode <select id="editing-mode">
-        <option value="native">Standard preview</option>
-        <option value="isolated">Isolated surface</option>
-      </select></label>
       <label>Skin <select id="skin">
         <option value="">Default</option>
         <option value="bootstrap">Bootstrap</option>
@@ -64,40 +59,39 @@
       </select></label>
       <label><input id="native" type="checkbox"> Show native editing layer</label>
     </div>
-    <p id="mode-status" role="status">Starting the editor…</p>
+    <p id="editor-status" role="status">Starting the editor…</p>
     <div id="markdown-editor"></div>
-    <details id="history-demo">
-      <summary>Try editor and application undo separately</summary>
-      <p>Edit the Markdown, then this unrelated field. Press Undo in the Markdown toolbar.
-        Standard mode shares native history. The isolated surface separates it in tested Chromium/Firefox,
-        but Linux WebKit can still undo this application field. Check your target browser.</p>
-      <label>Application note <textarea id="history-note">An unrelated application field.</textarea></label>
-    </details>
     <h2>Actual Markdown</h2>
     <p>This is the text returned by the editor, not HTML. Nothing is uploaded or stored automatically.</p>
-    <pre id="raw" tabindex="0" aria-label="Actual Markdown output"></pre>
+    <pre data-code-language="markdown" id="raw" tabindex="0" aria-label="Actual Markdown output"></pre>
     <p class="notice">Select text and try the toolbar or Ctrl/Cmd+B/I/K. Your Markdown stays editable,
       with native selection and undo. Preview and Side-by-side render locally with MeltDown;
       images appear as placeholders. Use a maintained HTML sanitizer when publishing untrusted content.</p>
     <h2>Quickstart</h2>
-    <p>Load shared editor CSS, then MaiDEn CSS. MeltDown is optional; include it to enable Preview and Side-by-side.</p>
-    <pre style="overflow:auto;padding:16px;border:1px solid;border-radius:6px"><code>&lt;link rel="stylesheet" href="lightmetal.css"&gt;
+    <p>Load shared editor CSS, then MaiDEn CSS. MeltDown enables Preview and Side-by-side; poliSH adds code colors through its highlighting hook.</p>
+    <pre data-code-language="html" style="overflow:auto;padding:16px;border:1px solid;border-radius:6px"><code>&lt;link rel="stylesheet" href="lightmetal.css"&gt;
 &lt;link rel="stylesheet" href="maiden.css"&gt;
+&lt;link rel="stylesheet" href="polish.css"&gt;
 &lt;div id="editor" class="lightmetal"&gt;&lt;/div&gt;
 &lt;script src="MeltDown.js"&gt;&lt;/script&gt;
+&lt;script src="polish.js"&gt;&lt;/script&gt;
 &lt;script src="maiden.js"&gt;&lt;/script&gt;
 &lt;script&gt;
+  const highlighter = polish.createHighlighter({ languages: polish.allLanguages });
   const editor = maiden.init({
     element: document.getElementById('editor'),
-    preview: { render: meltDown.parse },
+    preview: { render: text =&gt; meltDown.parse(text, { highlight: highlighter.highlight }) },
     onChange: markdown =&gt; console.log(markdown)
   });
   editor.setMarkdown('# Hello, MaiDEn!');
+  editor.element.querySelector('.lightmarkdown-preview').classList.add('polish', 'theme-light');
 &lt;/script&gt;</code></pre>
     <p>Read source with <code>editor.getMarkdown()</code>. Use <code>editor.insertText(text)</code> for native insertion and <code>editor.destroy()</code> on teardown. Omit <code>preview</code> for source-only editing, or supply your own renderer.</p>
     <script src="../dist/MeltDown.js"></script>
-    <script id="markdown-library" src="../dist/maiden.js"></script>
-    <script src="../examples/markdown-surface.js"></script>
+    <script src="../dist/polish.js"></script>
+    <script src="../examples/code-blocks.js"></script>
+    <script src="../examples/polish-demo.js"></script>
+    <script src="../dist/maiden.js"></script>
     <script>
       const initialMarkdown = [
         "# Markdown, down to the metal.",
@@ -112,6 +106,11 @@
         "An underline-style heading",
         "--------------------------",
         "The underline stays in your Markdown too.",
+        "",
+        "```js",
+        "const message = 'Code, with a little poliSH.';",
+        "console.log(message);",
+        "```",
         "",
         "Try typing, selecting across lines, wrapping a long sentence, and undoing your edits.",
         "Change a ## heading into plain text by deleting its markers.",
@@ -128,70 +127,27 @@
         ""
       ].join("\n");
       const host = document.getElementById("markdown-editor");
-      // Reuse this Text node too: updating a textarea.value during input also
-      // interrupts Chromium's undo grouping in the separate editable surface.
-      const rawText = document.createTextNode("");
-      document.getElementById("raw").append(rawText);
-      const editingMode = document.getElementById("editing-mode");
-      const modeStatus = document.getElementById("mode-status");
+      // The output painter reuses spans/Text nodes to preserve native typing groups.
+      const rawOutput = document.getElementById('raw');
+      const editorStatus = document.getElementById("editor-status");
       function applyAppearance() {
         for (const name of ["bootstrap", "material-classic", "material-outline", "frost", "patina", "sterling", "substantial"]) {
           host.classList.toggle("lightmetal-" + name, document.getElementById("skin").value === name);
         }
         const palette = document.getElementById("palette").value;
-        host.classList.toggle("lightmetal-light", palette === "light");
-        host.classList.toggle("lightmetal-dark", palette === "dark");
+        document.documentElement.dataset.lightmetalTheme = palette;
         host.classList.toggle("lightmarkdown-native", document.getElementById("native").checked);
       }
-      async function mountEditor(mode) {
-        const previous = window.__markdownEditor;
-        if (previous?.content.closest(".lightmarkdown").classList.contains("lightmarkdown-composing")) {
-          editingMode.value = window.__markdownMode;
-          modeStatus.textContent = "Finish the current composition before changing editing mode.";
-          return;
-        }
-        const value = previous ? previous.getMarkdown() : initialMarkdown;
-        editingMode.disabled = true;
-        host.setAttribute("aria-busy", "true");
-        previous?.destroy();
-        window.__markdownEditor = null;
-        window.__markdownError = null;
-        modeStatus.textContent = "Starting the editor…";
-        const settings = { element: host, preview: { render: meltDown.parse }, onChange(value) { rawText.data = value; } };
-        let fallback = false;
-        try {
-          try {
-            window.__markdownEditor = mode === "isolated"
-              ? await __initMarkdownSurface(settings)
-              : maiden.init(settings);
-            if (mode === "isolated") window.__markdownEditor.content.contentEditable = "plaintext-only";
-          } catch (error) {
-            if (mode !== "isolated") throw error;
-            window.__markdownError = error.message;
-            mode = "native"; fallback = true;
-            window.__markdownEditor = maiden.init(settings);
-          }
-          window.__markdownEditor.setMarkdown(value);
-          applyAppearance();
-          window.__markdownMode = mode;
-          editingMode.value = mode;
-          modeStatus.textContent = (fallback
-            ? "The isolated surface could not start. Kept your text in the standard editor. "
-            : mode === "isolated"
-              ? "Experimental isolated plaintext surface; the toolbar stays in this page. "
-              : "Standard preview; native undo is managed by the browser. ")
-            + "Changing mode keeps Markdown but resets editor undo. Nothing is saved automatically.";
-        } finally {
-          editingMode.disabled = false;
-          host.removeAttribute("aria-busy");
-        }
-      }
-      function showStartupError(error) {
+      try {
+        window.__markdownEditor = maiden.init({ element: host, preview: { render: polishDemo.render },
+          onChange(value) { exampleCode.write(rawOutput, value, 'markdown'); } });
+        window.__markdownEditor.setMarkdown(initialMarkdown);
+        applyAppearance();
+        editorStatus.textContent = "Native browser editing and undo. Preview and Side-by-side keep your Markdown source intact.";
+      } catch (error) {
         window.__markdownError = error.message;
-        modeStatus.textContent = "The editor could not start. Any existing Markdown remains in the output below.";
+        editorStatus.textContent = "The editor could not start. Check the local assets.";
       }
-      editingMode.addEventListener("change", () => mountEditor(editingMode.value).catch(showStartupError));
-      mountEditor(new URLSearchParams(location.search).get("mode") === "isolated" ? "isolated" : "native").catch(showStartupError);
       document.getElementById("skin").addEventListener("change", event => {
         for (const name of ["bootstrap", "material-classic", "material-outline", "frost", "patina", "sterling", "substantial"]) {
           host.classList.toggle("lightmetal-" + name, event.target.value === name);
@@ -200,8 +156,7 @@
       document.getElementById("palette").addEventListener("change", event => {
         const mode = event.target.value;
         document.documentElement.dataset.mode = mode;
-        host.classList.toggle("lightmetal-light", mode === "light");
-        host.classList.toggle("lightmetal-dark", mode === "dark");
+        document.documentElement.dataset.lightmetalTheme = mode;
       });
       document.getElementById("native").addEventListener("change", event => {
         host.classList.toggle("lightmarkdown-native", event.target.checked);

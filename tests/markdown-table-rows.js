@@ -148,26 +148,17 @@ async function tableRowChecks(browser, base, name) {
     await page.evaluate(() => { window.__deadRows = __markdownEditor.content; __markdownEditor.destroy(); });
     assert.equal(await page.evaluate(() => !__deadRows.dispatchEvent(new KeyboardEvent("keydown", { key: "R", altKey: true, shiftKey: true, bubbles: true, cancelable: true }))), false);
     monitor = false;
-    for (const mode of ["whole", "surface"]) {
-      await page.goto(base + (mode === "whole" ? "/examples/markdown-iframe.html" : "/examples/markdown.html?mode=isolated"));
-      if (mode === "whole") {
-        await page.waitForFunction(() => !document.getElementById("read-markdown").disabled);
-        await page.frameLocator("#isolated-editor").locator(".lightmarkdown-input").evaluate((node, text) => {
-          const win = node.ownerDocument.defaultView, host = node.closest(".lightmarkdown"); win.__markdownEditor.destroy(); win.__rowChanges = 0;
-          win.__markdownEditor = win.maiden.init({ element: host, actions: ["table-row-after", "table-row-delete", "undo", "redo"], onChange: () => win.__rowChanges++ });
-          win.__markdownEditor.setMarkdown(text); win.__rowChanges = 0;
-        }, header + "\n" + one);
-      } else {
-        await page.waitForFunction(() => window.__markdownEditor && __markdownMode === "isolated");
-        await page.evaluate(async text => {
-          __markdownEditor.destroy(); window.__rowChanges = 0;
-          window.__markdownEditor = await __initMarkdownSurface({ element: document.getElementById("markdown-editor"), actions: ["table-row-after", "table-row-delete", "undo", "redo"], onChange: () => __rowChanges++ });
-          __markdownEditor.setMarkdown(text); window.__rowChanges = 0;
-        }, header + "\n" + one);
-      }
-      const view = page.frameLocator(mode === "whole" ? "#isolated-editor" : ".lightmarkdown-surface-frame");
-      const input = view.locator(".lightmarkdown-input"), bar = (mode === "whole" ? view : page).getByRole("group", { name: "Markdown formatting" });
-      const read = () => mode === "whole" ? input.evaluate(node => node.ownerDocument.defaultView.__markdownEditor.getMarkdown()) : page.evaluate(() => __markdownEditor.getMarkdown());
+    {
+      await page.goto(base + "/examples/markdown-iframe.html");
+      await page.waitForFunction(() => !document.getElementById("read-markdown").disabled);
+      const view = page.frameLocator("#isolated-editor");
+      const input = view.locator(".lightmarkdown-input"), bar = view.getByRole("group", { name: "Markdown formatting" });
+      await input.evaluate((node, text) => {
+        const win = node.ownerDocument.defaultView, host = node.closest(".lightmarkdown"); win.__markdownEditor.destroy(); win.__rowChanges = 0;
+        win.__markdownEditor = win.maiden.init({ element: host, actions: ["table-row-after", "table-row-delete", "undo", "redo"], onChange: () => win.__rowChanges++ });
+        win.__markdownEditor.setMarkdown(text); win.__rowChanges = 0;
+      }, header + "\n" + one);
+      const read = () => input.evaluate(node => node.ownerDocument.defaultView.__markdownEditor.getMarkdown());
       await input.evaluate(node => {
         const doc = node.ownerDocument, range = doc.createRange(); range.setStart(node.children[2].firstChild, 2); range.collapse(true);
         node.focus(); doc.getSelection().removeAllRanges(); doc.getSelection().addRange(range); node.dispatchEvent(new Event("focus"));
@@ -175,12 +166,12 @@ async function tableRowChecks(browser, base, name) {
       monitor = true; await bar.getByRole("button", { name: "Add Row After", exact: true }).click();
       assert.equal(await read(), header + "\n" + one + "\n" + empty);
       await bar.getByRole("button", { name: "Delete Row", exact: true }).click(); assert.equal(await read(), header + "\n" + one);
-      assert.equal(mode === "whole" ? await input.evaluate(node => node.ownerDocument.defaultView.__rowChanges) : await page.evaluate(() => __rowChanges), 2);
+      assert.equal(await input.evaluate(node => node.ownerDocument.defaultView.__rowChanges), 2);
       await page.keyboard.press("Control+z"); assert.equal(await read(), header + "\n" + one + "\n" + empty);
       await page.keyboard.press("Control+z"); assert.equal(await read(), header + "\n" + one); monitor = false;
     }
     assert.deepEqual(errors, []); assert.deepEqual(requests, []);
-    console.log(`${name}: table add/delete body rows, headers/delimiters, source/caret/containers, callbacks/native history, guards, custom/keyboard-only and both iframe paths: ok`);
+    console.log(`${name}: table add/delete body rows, headers/delimiters, source/caret/containers, callbacks/native history, guards, custom/keyboard-only and whole-editor iframe: ok`);
   } finally { await page.close(); }
 }
 module.exports = { tableRowChecks };

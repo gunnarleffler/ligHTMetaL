@@ -39,7 +39,9 @@ export function groupToolbar(toolbar, entries) {
   };
   refresh();
   const observer = new MutationObserver(records => {
-    if (records.some(record => record.target.tagName === 'BUTTON')) refresh();
+    // Ignore our own divider mutations, but include toolbar-level CSS changes.
+    if (records.some(record => record.target.tagName === 'BUTTON' ||
+      (record.target === toolbar && (record.attributeName === 'class' || record.attributeName === 'style')))) refresh();
   });
   observer.observe(toolbar, { subtree: true, attributes: true, attributeFilter: ['hidden', 'style', 'class', 'disabled'] });
   return () => observer.disconnect();

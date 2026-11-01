@@ -1,7 +1,7 @@
 {
   "name": "lightmetal",
-  "version": "0.5.0",
-  "description": "ligHTMetaL: local-first HTML and Markdown editors plus a Markdown parser. Zero runtime dependencies.",
+  "version": "0.6.0",
+  "description": "ligHTMetaL: local-first HTML and Markdown editors, a Markdown parser, and syntax highlighting. Zero runtime dependencies.",
   "main": "dist/lightmetal.js",
   "module": "dist/lightmetal.esm.js",
   "files": [
@@ -10,13 +10,19 @@
     "ligHTMetaL.png",
     "README.md",
     "CHANGELOG.md",
-    "docs/MeltDown.md"
+    "docs/reference.md",
+    "docs/MeltDown.md",
+    "docs/poliSH.md",
+    "docs/specs/polish-spec.md"
   ],
   "scripts": {
     "build": "bash build/build.sh",
-    "test": "npm run build && NODE_PATH=$(npm root -g) node tests/smoke.js && npm run test:meltdown && npm run test:markdown && npm run test:security",
+    "test": "npm run build && NODE_PATH=$(npm root -g) node tests/smoke.js && npm run test:meltdown && npm run test:polish && npm run test:polish:browser && npm run test:markdown && npm run test:security",
     "test:meltdown": "node --test tests/meltdown/*.test.js",
+    "test:polish": "node --test tests/polish/*.test.js && node tests/polish-meltdown.mjs src/MeltDown.js",
+    "test:polish:browser": "NODE_PATH=$(npm root -g) node --test tests/polish-browser.mjs",
     "test:markdown": "NODE_PATH=$(npm root -g) node tests/markdown.js",
+    "test:markdown:native-frame": "NODE_PATH=$(npm root -g) node tests/native-frame-focus.js",
     "test:package": "NODE_PATH=$(npm root -g) node tests/package-smoke.js",
     "test:security": "NODE_PATH=$(npm root -g) node tests/security-review.js"
   },
@@ -26,12 +32,12 @@
     "html",
     "markdown",
     "parser",
+    "syntax-highlighting",
     "local-first",
     "pell"
   ],
   "license": "MIT",
   "devDependencies": {
-    "esbuild": "^0.28.2",
-    "highlight.js": "11.12.0"
+    "esbuild": "^0.28.2"
   }
 }

@@ -594,14 +594,15 @@ async function runChecks(browser, label) {
   await page.evaluate(() => {
     window.__tableEditor.setHTML("");
     window.__tableEditor.content.focus();
-    window.__tableEditor.element.querySelector('button[title="Insert table"]').click();
+    window.__tableEditor.element.querySelector('button[title="Table"]').click();
+    window.__tableEditor.element.querySelector('.lightmetal-table-menu [role="menuitem"]').click();
   });
   check("table toolbar opens an insertion dropdown", await page.evaluate(() =>
-    !window.__tableEditor.element.querySelector('.lightmetal-table-dropdown').hidden));
+    !window.__tableEditor.element.querySelector('.lightmetal-table-dropdown[role="dialog"]').hidden));
   await page.evaluate(() => window.__tableEditor.element.querySelector('[data-column="3"][data-row="2"]').click());
   check("grid inserts the requested table", await page.evaluate(() => window.__tableEditor.content.querySelectorAll("td").length === 6));
   const beforeCancel = await page.evaluate(() => window.__tableEditor.getHTML());
-  await page.evaluate(() => window.__tableEditor.element.querySelector('button[title="Insert table"]').click());
+  await page.evaluate(() => window.__tableEditor.element.querySelector('button[title="Table"]').click());
   await page.keyboard.press("Escape");
   check("canceling table insertion leaves content unchanged", beforeCancel === await page.evaluate(() => window.__tableEditor.getHTML()));
   const destroyedTable = await page.evaluate(() => {
@@ -614,6 +615,7 @@ async function runChecks(browser, label) {
 
   await require("./table-controls.js")(page, check);
   await require("./table-insertion.js")(page, check);
+  await require("./table-menu.js")(page, check);
 
   // rawMode passes HTML through untouched.
   const rawHTML = await page.evaluate(() => {
@@ -1063,7 +1065,8 @@ async function runChecks(browser, label) {
         element: host, actions: ["bold", "image", "table", "source"], images: { allowURL: false }
       });
       host.querySelector('button[title="Image"]').click();
-      host.querySelector('button[title="Insert table"]').click();
+      host.querySelector('button[title="Table"]').click();
+      host.querySelector('.lightmetal-table-menu [role="menuitem"]').click();
       const lazyUI = !!host.querySelector('input[type="file"]') &&
         host.querySelectorAll(".lightmetal-table-grid button").length === 80;
       const capturedScroll = active.some((listener) => listener.target === window &&
@@ -1151,8 +1154,11 @@ async function fileCheck() {
     ]) {
       const launched = await browser.launch();
       try {
+        await require('./themes').runThemeChecks(launched);
+        await require('./themes').runThemeChecks(launched, { minified: true });
+        results.push(label + ' independent/shared CSS themes (plain/minified): ok');
         await require('./showcase').runShowcaseChecks(launched, BASE + '/');
-        results.push(label + ' three-library showcase/navigation: ok');
+        results.push(label + ' four-library showcase/navigation: ok');
         await runChecks(launched, label);
         await require("./skins").runSkinChecks(launched, BASE + "/", BASE + "/dist/");
         results.push(label + " seven skins (plain/minified): ok");

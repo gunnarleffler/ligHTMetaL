@@ -6,7 +6,7 @@ import { parse } from '../../src/MeltDown.js';
 const examples = [
   ['empty input', '', ''],
   ['blank input', ' \t\n\n', ''],
-  ['heading', '# Hello', '<h1>Hello</h1>'],
+  ['heading', '# Hello', '<h1 id="hello">Hello</h1>'],
   ['paragraph and bold', 'A **bold** paragraph.', '<p>A <strong>bold</strong> paragraph.</p>'],
   ['unordered list', '- Item\n* Two\n+ Three', '<ul><li>Item</li><li>Two</li><li>Three</li></ul>'],
   ['blockquote', '> Quote', '<blockquote><p>Quote</p></blockquote>'],
@@ -22,16 +22,16 @@ const examples = [
   ['code isolation', '`**bold** [x](https://x.test) <b> &copy;`', '<p><code>**bold** [x](https://x.test) &lt;b&gt; &amp;copy;</code></p>'],
   ['fence isolation', '```\n**bold** <b> &copy;\n```', '<pre><code>**bold** &lt;b&gt; &amp;copy;</code></pre>'],
   ['paragraph boundaries', 'one\ntwo\n\nthree', '<p>one\ntwo</p>\n<p>three</p>'],
-  ['adjacent blocks', 'before\n# Heading\n- item\n> quote\nafter', '<p>before</p>\n<h1>Heading</h1>\n<ul><li>item</li></ul>\n<blockquote><p>quote</p></blockquote>\n<p>after</p>'],
+  ['adjacent blocks', 'before\n# Heading\n- item\n> quote\nafter', '<p>before</p>\n<h1 id="heading">Heading</h1>\n<ul><li>item</li></ul>\n<blockquote><p>quote</p></blockquote>\n<p>after</p>'],
   ['quote paragraphs', '> one\n> two\n>\n> three', '<blockquote><p>one\ntwo</p>\n<p>three</p></blockquote>'],
-  ['closing heading markers', '## Hello ##\n# C#', '<h2>Hello</h2>\n<h1>C#</h1>'],
+  ['closing heading markers', '## Hello ##\n# C#', '<h2 id="hello">Hello</h2>\n<h1 id="c">C#</h1>'],
   ['escaped punctuation', '\\*literal\\* and a\\|b', '<p>*literal* and a|b</p>'],
   ['unclosed fence', '```js\nhello', '<pre><code class="language-js">hello</code></pre>'],
   ['long fence', '````\n```\n````', '<pre><code>```</code></pre>'],
   ['tilde fence', '~~~\n<x>\n~~~', '<pre><code>&lt;x&gt;</code></pre>'],
   ['malformed fence opener', '```bad info\ntext', '<p>```bad info\ntext</p>'],
-  ['ordered list and setext strike heading', '1. ordered\n~~strike~~\n---', '<ol><li>ordered</li></ol>\n<h2><del>strike</del></h2>'],
-  ['nested blockquotes and headings', '> > nested\n> # heading', '<blockquote><blockquote><p>nested</p></blockquote>\n<h1>heading</h1></blockquote>'],
+  ['ordered list and setext strike heading', '1. ordered\n~~strike~~\n---', '<ol><li>ordered</li></ol>\n<h2 id="strike"><del>strike</del></h2>'],
+  ['nested blockquotes and headings', '> > nested\n> # heading', '<blockquote><blockquote><p>nested</p></blockquote>\n<h1 id="heading">heading</h1></blockquote>'],
   ['nested list', '- parent\n  - child', '<ul><li>parent\n<ul><li>child</li></ul></li></ul>'],
   ['literal sentinel input', '\0C0\0 \0I0\0 \0B\0', '<p>\0C0\0 \0I0\0 \0B\0</p>'],
 ];
@@ -55,7 +55,7 @@ test('normalizes LF, CRLF, and CR', () => {
 
 test('all six heading levels', () => {
   for (let level = 1; level <= 6; level++) {
-    assert.equal(parse('#'.repeat(level) + ' Hi'), `<h${level}>Hi</h${level}>`);
+    assert.equal(parse('#'.repeat(level) + ' Hi'), `<h${level} id="hi">Hi</h${level}>`);
   }
   assert.equal(parse('####### Hi'), '<p>####### Hi</p>');
 });
@@ -121,7 +121,7 @@ test('malformed tables remain prose and extra cells are not discarded', () => {
 
 test('table can interrupt a paragraph and end before another block', () => {
   assert.equal(parse('intro\n| H |\n| --- |\n| x |\n# next'),
-    '<p>intro</p>\n<table><thead><tr><th>H</th></tr></thead><tbody><tr><td>x</td></tr></tbody></table>\n<h1>next</h1>');
+    '<p>intro</p>\n<table><thead><tr><th>H</th></tr></thead><tbody><tr><td>x</td></tr></tbody></table>\n<h1 id="next">next</h1>');
 });
 
 test('repeated calls have no parsing state', () => {
@@ -142,7 +142,7 @@ test('core has no browser-global side effects', () => {
     globalThis.fetch = () => { throw new Error('Unexpected network access'); };
     const { parse } = await import(${JSON.stringify(new URL('../../src/MeltDown.js', import.meta.url).href)});
     assert.deepEqual(window, {});
-    assert.equal(parse('# Hi'), '<h1>Hi</h1>');
+    assert.equal(parse('# Hi'), '<h1 id="hi">Hi</h1>');
     parse('![image](https://example.com/image.png)');
   `]);
 });

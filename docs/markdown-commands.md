@@ -282,41 +282,52 @@ Custom action results retain their existing application-owned behavior.
 
 ## Table insertion (M4)
 
-`table` appears beside Image in the default toolbar. Explicit `actions` arrays
-can include or omit it, and it can be bound to a keyboard-only shortcut. There is
-no default table shortcut. For example:
+`table` appears beside Image in the default toolbar. It opens a menu with Insert
+Table…, Format Table, row/column add/delete, and the four column-alignment commands.
+Commands follow their source-selection rules and disable when unavailable. Arrow
+keys and Home/End move among enabled items. Enter/Space invokes; Escape closes and
+returns focus to Table. Tab closes and continues native toolbar traversal.
+Opening or cancelling the menu does not edit source or native history.
+
+Explicit `actions` arrays can include or omit the menu. All its commands also work
+as individual buttons or keyboard-only shortcuts. `table-insert` opens the size
+picker directly; `table-format` pads the current table. No table shortcut is added
+by default. For example:
 
 ```js
 maiden.init({ element, actions: ["bold", "italic", "table"] });
 ```
 
-At a collapsed caret on an empty source-body line, Table opens a size picker.
+At a collapsed caret on an empty source-body line, Insert Table… opens a size picker.
 Choose a size from the 10 × 8 grid, or enter Columns and Rows and click Insert.
 Both fields default to 3. Rows include the header; the Markdown delimiter line
 does not count. One row creates a header-only table. The default 3 × 3 produces:
 
 ```markdown
 | Column 1 | Column 2 | Column 3 |
-| --- | --- | --- |
-|  |  |  |
-|  |  |  |
+| -------- | -------- | -------- |
+|          |          |          |
+|          |          |          |
 ```
 
-`Column 1` stays selected for immediate native replacement. Columns must be
+New tables start formatted, with padded columns and matching delimiter widths.
+This happens in the insertion itself, not a second edit. `Column 1` stays selected
+for immediate native replacement. Columns must be
 integers from 1 to 100, rows from 1 to 1,000, with at most 10,000 cells (rows ×
 columns). Invalid dimensions show a picker note without editing. These limits
 apply to creation only; imported tables and existing row/column commands retain
 their behavior. No new size configuration or insertion API is added.
 
 Arrow keys move through grid sizes; Enter/Space chooses one. Tab reaches the
-numeric fields and Insert. Escape or an outside click cancels. The Table button
-exposes expanded/dialog state, not a pressed-state toggle. The picker saves the
+numeric fields and Insert. Escape or an outside click cancels. Table exposes
+expanded/menu state; a direct Insert Table… button exposes expanded/dialog state.
+Neither is a pressed-state toggle. The picker saves the
 insertion point before taking focus. A setter closes it; direct source mutations
 invalidate it. Confirmation refuses a stale position rather than inserting at
 the current caret or the end. Closing/cancelling adds no source history or change
 notification. The picker reuses the shared HTML-editor CSS, not its JavaScript.
-UI follows the toolbar document; source selection/history stays in the editing
-document, including both iframe layouts. A non-popover fallback uses the same UI.
+UI, source selection, and native history stay in the same editing document,
+inline or inside a whole-editor iframe. A non-popover fallback uses the same UI.
 
 Edit cells directly as Markdown source. There is no text conversion or editable
 DOM table grid. The command does not accept arbitrary cell text or escape later
@@ -340,16 +351,48 @@ local empty-line eligibility; full candidate validation runs on confirmation.
 Each insertion sends one `onChange` and uses one native undo step. Typing replaces
 the selected header normally; Undo restores that header, then undoes the table.
 Composition remains native. Custom result/state callbacks retain their overrides,
-and keyboard-only invocation and both iframe layouts follow the existing rules.
+and keyboard-only invocation and whole-editor iframe use follow the existing rules.
 Table has no built-in pressed-state toggle. Save/reload preserves plain Markdown,
 not a hidden DOM table model. Text conversion needs separate agreement. Native
 Undo reverses the confirmed insertion.
 
+## Table source formatting
+
+`table-format` (Format Table) appears in the default Table menu. A caret or selection
+inside one recognized, non-ragged table targets that whole table, including its
+header and delimiter. A selection may span cells or rows within the table. Literal
+blocks, container-prefix positions, ragged tables, and selections crossing table
+boundaries are refused.
+
+Formatting uses one space inside each outer pipe, pads each column to its widest
+cell, and adjusts the delimiter to that width with at least three dashes. Alignment
+colons remain unchanged. Outer pipes become consistent; ASCII spaces/tabs around
+cells are normalized. Cell content, internal tabs, escapes, inline Markdown, and
+container prefixes stay intact. NBSP and BOM are content, not removable padding.
+
+This is monospace source formatting. It counts source characters and four-column
+tab stops, not rendered glyph widths. Wide or combining characters may not align
+perfectly. It does not measure fonts, support proportional fonts, right-justify
+cell text, or reformat while typing. Insertion generates formatted source directly;
+other edits leave spacing alone until Format Table is requested.
+
+The selected cell text stays selected after padding. Candidate recognition protects
+cell content, alignment, table membership, containers, and neighboring Markdown.
+Unsafe candidates show a note without editing. A change sends one `onChange` and
+uses one native undo step. Identical output preserves source nodes, callbacks, and
+history. Composition disables the command. Custom action results retain their
+overrides. Inline and whole-editor iframe use share these rules.
+
+```js
+// Optional direct buttons instead of the Table menu.
+maiden.init({ element, actions: ["table-insert", "table-format", "undo", "redo"] });
+```
+
 ## Table body rows (M4)
 
-`table-row-after` (Add Row After) and `table-row-delete` (Delete Row) are optional
-built-ins. The default toolbar and shortcuts stay unchanged. They can be buttons,
-keyboard-only actions, or custom result/state overrides:
+`table-row-after` (Add Row After) and `table-row-delete` (Delete Row) appear in the
+Table menu. They can also be individual buttons, keyboard-only actions, or custom
+result/state overrides:
 
 ```js
 maiden.init({
@@ -388,14 +431,15 @@ recognized row; full candidate validation runs on invocation.
 
 Each successful operation uses one native undo step and one `onChange`. Refused
 and state-only operations do not notify or add history. Composition, callbacks,
-native focus/history ownership, teardown, and both iframe layouts follow the
+native focus/history ownership, teardown, and whole-editor iframe use follow the
 existing rules. Neither action has a built-in pressed state. These commands do
 not resize columns, change alignment, normalize cells, or add table navigation.
 
 ## Table columns (M4)
 
 `table-column-after` (Add Column After) and `table-column-delete` (Delete Column)
-are optional built-ins. They add no default buttons or shortcuts. For example:
+appear in the Table menu. They can also be individual buttons or keyboard-only
+actions, with no default shortcuts. For example:
 
 ```js
 maiden.init({
@@ -439,13 +483,13 @@ candidate validation runs on invocation.
 
 Each successful edit uses one native undo step and one `onChange`. Composition,
 custom result/state callbacks, keyboard-only invocation, focus/history ownership,
-teardown, and both iframe layouts follow the existing rules. Neither command
+teardown, and whole-editor iframe use follow the existing rules. Neither command
 has a built-in pressed state. There is no grid, column resizing, multi-cell
 navigation, alignment editing, or text conversion.
 
 ## Table-column alignment (M4)
 
-Four optional actions set the current column's alignment:
+Four Table menu actions set the current column's alignment:
 
 | Action | Button | Delimiter example |
 | --- | --- | --- |
@@ -454,7 +498,8 @@ Four optional actions set the current column's alignment:
 | `table-align-right` | Align Column Right | `---:` |
 | `table-align-none` | Clear Column Alignment | `---` |
 
-They add no default buttons or shortcuts. For example:
+They can also be individual buttons or keyboard-only actions. No default shortcuts
+are added. For example:
 
 ```js
 maiden.init({
@@ -477,7 +522,8 @@ source range stays in its original header/body cell, mapped through the edit.
 These commands edit GFM source markers; they do not visually align source text or
 create a DOM grid.
 
-The built-in pressed state reflects the recognized column alignment. Unaligned
+The menu's checked state and individual buttons' pressed state reflect the
+recognized column alignment. Unaligned
 (`---`) and explicitly left-aligned (`:---`) are distinct modes. Outside an eligible
 cell, all four controls are disabled and unpressed. Applying the current mode
 again does not rewrite source nodes, notify, or add history. Native selection
@@ -489,8 +535,8 @@ headings, literal blocks, and task state. An unsafe edit shows a toolbar note wi
 no mutation, callback, or history entry. For example, removing the colon from a
 single-dash delimiter can expose a list marker; the command refuses rather than
 adding dashes or rewriting prefixes. Every actual change uses one native undo
-step and one `onChange`. Keyboard-only invocation, teardown, and both iframe
-layouts retain the editing document's focus/history ownership.
+step and one `onChange`. Keyboard-only invocation, teardown, and whole-editor
+iframe use retain the editing document's focus/history ownership.
 
 ## Native Undo/Redo availability
 
@@ -676,8 +722,9 @@ A visible hint below the writing area reads:
 The source references this per-instance hint through `aria-describedby`. Its
 polite live text announces the armed escape and unsafe moves. The hint stays
 available with an empty toolbar and is removed on teardown. Browser checks cover
-native focus movement in inline, whole-editor iframe, and parent-toolbar/child-
-surface examples; they do not claim manual screen-reader or Safari validation.
+native focus movement inline and within the whole-editor iframe. Cross-document
+focus routing has a separate native diagnostic. These checks do not claim manual
+screen-reader or Safari validation.
 
 ## Headings
 
@@ -894,9 +941,9 @@ callbacks retain their existing application-defined edit behavior.
 Bound buttons show their chord in the native tooltip and `aria-keyshortcuts`.
 Accessible names and custom text/icons stay unchanged. Disabled/rebound bindings
 never advertise the old key; unbound buttons and separators gain no shortcut hint.
-These are command hints, not a new toolbar, help panel, or keyboard trap. Both
-iframe examples preserve child-owned command handling, including the ported
-parent toolbar. Manual screen-reader, real IME/AltGr, and Safari checks remain open.
+These are command hints, not a new toolbar, help panel, or keyboard trap. The
+whole-editor iframe keeps command handling in its child document. Manual
+screen-reader, real IME/AltGr, and Safari checks remain open.
 
 ## Verification
 
@@ -916,6 +963,7 @@ NODE_PATH=$(npm root -g) node tests/markdown-tables.js
 NODE_PATH=$(npm root -g) node tests/markdown-table-rows.js
 NODE_PATH=$(npm root -g) node tests/markdown-table-columns.js
 NODE_PATH=$(npm root -g) node tests/markdown-table-alignment.js
+NODE_PATH=$(npm root -g) node tests/markdown-table-format.js
 NODE_PATH=$(npm root -g) node tests/markdown-table-picker.js
 ```
 

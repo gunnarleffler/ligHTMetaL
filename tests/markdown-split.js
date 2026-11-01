@@ -58,15 +58,15 @@ async function splitChecks(browser, base, name) {
     await split.click();
     assert.equal(await view.isVisible(), false);
     await page.evaluate(() => __markdownEditor.destroy()); assert.equal(await page.locator('.lightmarkdown-split').count(), 0);
-    await page.goto(base + '/examples/markdown.html?mode=isolated');
-    await page.waitForFunction(() => window.__markdownMode === 'isolated' && window.__markdownEditor);
-    await page.getByRole('button', { name: 'Side-by-side', exact: true }).click();
-    const frame = page.frameLocator('iframe');
-    await frame.getByRole('region', { name: 'Markdown preview' }).locator('h1').waitFor();
+    await page.goto(base + '/examples/markdown-iframe.html');
+    await page.waitForFunction(() => !document.getElementById('read-markdown').disabled);
+    const frame = page.frameLocator('#isolated-editor');
+    await frame.getByRole('button', { name: 'Side-by-side', exact: true }).click();
+    await frame.getByRole('region', { name: 'Markdown preview' }).locator('h2').waitFor();
     assert.equal(await frame.locator('.lightmarkdown-split').evaluate(node => getComputedStyle(node).display), 'grid');
     const panes = await frame.locator('.lightmarkdown-scroll,.lightmarkdown-preview').evaluateAll(nodes => nodes.map(node => { const r = node.getBoundingClientRect(); return { y: r.y, height: r.height, bottom: r.bottom }; }));
     assert.ok(panes[1].y >= panes[0].bottom - 2);
-    assert.ok(panes[1].bottom <= 401);
+    assert.equal(await frame.locator('.lightmarkdown-preview').evaluate(node => node.getBoundingClientRect().bottom <= innerHeight), true);
     assert.deepEqual(errors, []);
     console.log(name + ': live split rendering, native typing/undo/redo, source nodes/selection, view transitions, bidirectional proportional/wheel scrolling, fullscreen, narrow stacking and teardown: ok');
   } finally { await page.close(); }

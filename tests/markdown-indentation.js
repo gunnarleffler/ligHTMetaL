@@ -13,9 +13,35 @@ async function indentationChecks(browser, base, name) {
       const before = document.createElement("button"); before.id = "indent-before"; before.textContent = "Before editor";
       const after = document.createElement("button"); after.id = "indent-after"; after.textContent = "After editor";
       __markdownEditor.element.before(before); __markdownEditor.element.after(after);
+      __markdownEditor.element.style.maxWidth = '390px';
     });
     const source = page.locator(".lightmarkdown-input"), hint = page.locator(".lightmarkdown-keyboard-hint");
     const get = () => page.evaluate(() => __markdownEditor.getMarkdown());
+    await page.locator('#indent-before').focus();
+    assert.equal(await page.locator('#editor .lightmetal-actionbar button').evaluateAll(buttons => buttons.every(button => button.tabIndex === -1)), true);
+    await page.keyboard.press('Tab');
+    assert.equal(await source.evaluate(node => node === document.activeElement), true, 'Forward entry skips the toolbar');
+    await page.keyboard.press('Escape'); await page.keyboard.press('Shift+Tab');
+    assert.equal(await page.locator('#editor .lightmetal-actionbar button:enabled').last().evaluate(node => node === document.activeElement), true, 'Toolbar remains reachable from source');
+    await page.keyboard.press('Tab');
+    assert.equal(await source.evaluate(node => node === document.activeElement), true);
+    await page.keyboard.press('Escape'); await page.keyboard.press('Tab');
+    assert.equal(await page.locator('#indent-after').evaluate(node => node === document.activeElement), true);
+    await page.keyboard.press('Shift+Tab');
+    assert.equal(await source.evaluate(node => node === document.activeElement), true, 'Backward entry reaches source');
+    assert.equal(await get(), '', 'Focus traversal does not edit the document');
+    await page.evaluate(() => {
+      __markdownEditor.element.style.maxWidth = '';
+      const host = document.createElement('div'); host.id = 'entry-second'; document.getElementById('indent-after').before(host);
+      window.__entrySecond = __initMarkdown({ element: host, actions: ['bold'] });
+    });
+    await page.locator('#indent-before').focus(); await page.keyboard.press('Tab');
+    await page.keyboard.press('Escape'); await page.keyboard.press('Tab');
+    assert.equal(await page.locator('#entry-second .lightmarkdown-input').evaluate(node => node === document.activeElement), true, 'Tab between editors enters the next source');
+    assert.equal(await page.locator('#editor .lightmetal-actionbar button').evaluateAll(buttons => buttons.every(button => button.tabIndex === -1)), true);
+    await page.keyboard.press('Escape'); await page.keyboard.press('Tab');
+    assert.equal(await page.locator('#indent-after').evaluate(node => node === document.activeElement), true);
+    await page.evaluate(() => { __entrySecond.destroy(); document.getElementById('entry-second').remove(); });
     const count = () => page.evaluate(() => __markdownChanges.length - __indentBefore);
     const prepare = (text, start, end = start, shape = "blocks") => page.evaluate(({ text, start, end, shape }) => {
       const api = __markdownEditor; api.setMarkdown(text);
@@ -174,34 +200,24 @@ async function indentationChecks(browser, base, name) {
     await page.keyboard.press("Tab"); assert.equal(await page.evaluate(() => __indentTail === __markdownEditor.content.lastChild), true);
     assert.deepEqual(errors, []); assert.deepEqual(remote, []);
 
-    // Whole-editor iframe: let the browser move between documents naturally.
+    // Keep keyboard editing and toolbar traversal inside the whole-editor frame.
+    // Native cross-document traversal has its own diagnostic.
     await page.goto(base + "/examples/markdown-iframe.html");
     await page.waitForFunction(() => !document.getElementById("read-markdown").disabled);
     const view = page.frameLocator("#isolated-editor"), child = view.locator(".lightmarkdown-input");
-    await child.focus(); await page.keyboard.press("Escape"); await page.keyboard.press("Tab");
-    assert.equal(await page.locator("#read-markdown").evaluate(node => node === document.activeElement), true);
-    await child.focus(); await page.keyboard.press("Escape"); await page.keyboard.press("Shift+Tab");
+    await child.evaluate(node => {
+      const api = node.ownerDocument.defaultView.__markdownEditor; api.setMarkdown("metal");
+      node.focus(); node.ownerDocument.getSelection().collapse(node.firstChild.firstChild, 0);
+    });
+    await page.keyboard.press("Tab");
+    assert.equal(await child.evaluate(node => node.ownerDocument.defaultView.__markdownEditor.getMarkdown()), "    metal");
+    await page.keyboard.press("Control+z");
+    assert.equal(await child.evaluate(node => node.ownerDocument.defaultView.__markdownEditor.getMarkdown()), "metal");
+    await page.keyboard.press("Escape"); await page.keyboard.press("Shift+Tab");
     assert.equal(await view.getByRole("group", { name: "Markdown formatting" }).locator("button:enabled").last().evaluate(node => node === document.activeElement), true);
     assert.equal(await view.locator(".lightmarkdown-keyboard-hint").evaluate(node => node.getBoundingClientRect().bottom <= innerHeight), true, "iframe help stays in view");
     await page.setViewportSize({ width: 390, height: 844 });
     assert.equal(await view.locator(".lightmarkdown-keyboard-hint").evaluate(node => node.getBoundingClientRect().bottom <= innerHeight), true, "narrow whole-editor frame keeps its keyboard help visible");
-    // Parent-owned toolbar + child writing surface. Firefox may expose the
-    // child document body as one extra native focus stop; do not simulate order.
-    await page.goto(base + "/examples/markdown.html?mode=isolated");
-    await page.waitForFunction(() => window.__markdownEditor && __markdownMode === "isolated");
-    const surface = page.frameLocator(".lightmarkdown-surface-frame"), input = surface.locator(".lightmarkdown-input");
-    await input.focus(); await page.keyboard.press("Escape"); await page.keyboard.press("Tab");
-    const summary = page.locator("#history-demo > summary");
-    if (!await summary.evaluate(node => node === document.activeElement)) await page.keyboard.press("Tab");
-    assert.equal(await summary.evaluate(node => node === document.activeElement), true);
-    await input.focus(); await page.keyboard.press("Escape"); await page.keyboard.press("Shift+Tab");
-    const last = page.getByRole("group", { name: "Markdown formatting" }).locator("button:enabled").last();
-    if (!await last.evaluate(node => node === document.activeElement)) await page.keyboard.press("Shift+Tab");
-    assert.equal(await last.evaluate(node => node === document.activeElement), true);
-    await page.setViewportSize({ width: 390, height: 844 });
-    assert.equal(await surface.locator(".lightmarkdown-keyboard-hint").evaluate(node => {
-      const bounds = node.getBoundingClientRect(); return bounds.top >= 0 && bounds.bottom <= innerHeight;
-    }), true, "narrow parent-toolbar frame keeps its keyboard help visible");
     assert.deepEqual(errors, []); assert.deepEqual(remote, []);
     console.log(`${name}: Tab/Shift+Tab columns, list subtrees, unsafe moves, code/HTML guards, history, help/lifecycle and Escape/Tab focus traversal: ok`);
   } finally { await page.close(); }

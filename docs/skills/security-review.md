@@ -24,6 +24,10 @@ frameworks or sanitizer dependencies just for this review.
 | `unrestrictedMode: true` | HTML, URL, file-type, and file-size checks are intentionally bypassed; explicit image switches remain. |
 | Custom toolbar icons and callbacks | Trusted application configuration, not user content. |
 | Exported HTML | Untrusted application data; validate and sanitize before publishing. |
+| MaiDEn source setters and paste/drop | Source stays text; pasted HTML becomes plain text and drops are rejected. |
+| MaiDEn Preview and Side-by-side | Renderer output passes through a separate inert allowlist; async results have lifecycle guards. |
+| MeltDown | Raw HTML is escaped by default; raw allow mode and highlighting-hook HTML are trusted bypasses. |
+| poliSH | Escaped source and fixed token classes; ANSI adds numeric colors and fixed style properties. Grammars/loaders are trusted code. |
 
 Native editing and Source mode do not pass through the import sanitizer.
 Link prompts validate URLs except in unrestricted mode. Normal HTML drops
@@ -108,6 +112,28 @@ route-specific restrictions, including supported imported data URI images and th
 bypass. Explain
 that insertion/import may cause resource requests and that safe output is
 the consuming application's responsibility.
+
+### 5. Markdown rendering and highlighting
+
+Inspect MaiDEn's preview filter and retained-node painter, MeltDown's escaping
+and destination policy, and poliSH's renderers and loader boundary.
+
+- Apply hostile HTML to renderer and highlighting-hook results in both rendered
+  views. Check insertion and reparse, links, namespaces, and resource requests.
+- Keep source text inert. Check setters, plain-text paste, and rejected drops.
+- Verify default parser escaping and direct/reference/autolink destinations.
+  Test raw HTML and trusted hook bypasses separately, not as safe defaults.
+- Exercise all shipped grammars, unknown/unlabelled code, and ANSI input.
+  Syntax classes must survive preview filtering; ANSI inline styles must not.
+- Check stale async results, view exit, replacement, renderer failure, teardown,
+  and native undo. Inspect demo preview sandbox/CSP and navigation handling.
+- Review terminal-control escaping, theme validation, and explicit loader
+  manifests. Document input/time limits; regex and callback execution cannot be
+  interrupted by cooperative budgets.
+
+`tests/security-markdown.js` shares the HTML runner's hostile corpus. Existing
+Markdown and poliSH tests cover lifecycle, history, token, loader, and theme
+contracts. Keep these checks when reviewing changes to the rendering chain.
 
 ## Test method
 

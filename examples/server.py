@@ -72,6 +72,11 @@ def examples(path):
   return send_from_directory(EXAMPLES, path)
 
 
+@app.route("/README.md")
+def readme():
+  return send_from_directory(ROOT, "README.md")
+
+
 @app.route("/ligHTMetaL.png")
 def logo():
   # Served from the repo root for the demo at /; the same relative path

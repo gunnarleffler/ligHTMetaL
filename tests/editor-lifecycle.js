@@ -69,6 +69,89 @@ module.exports = async function editorLifecycleChecks(page, check) {
         invalid.errors.every(Boolean) && invalid.registrations === 0 &&
         invalid.removals === 0 && invalid.html === 'existing content');
 
+      const initialStates = await page.evaluate(() => {
+        const state = window.__lifecycle;
+        state.stateCalls = 0; state.customActive = false;
+        state.accessible = state.create({ actions: ['bold', 'italic', 'underline', 'strikethrough', 'line', 'source', {
+          title: 'Custom state', icon: 'X',
+          state: () => { state.stateCalls++; return state.customActive; },
+          result: () => { state.customActive = !state.customActive; return true; }
+        }] });
+        state.accessible.element.dataset.accessibilityTest = '';
+        state.accessible.element.style.maxWidth = '240px';
+        const before = document.createElement('button'); before.id = 'html-entry-before'; before.textContent = 'Before editor';
+        const after = document.createElement('button'); after.id = 'html-entry-after'; after.textContent = 'After editor';
+        state.accessible.element.before(before); state.accessible.element.after(after);
+        state.accessible.setHTML('<p>Accessible editing</p>');
+        return { calls: state.stateCalls, pressed: Array.from(state.accessible.element.querySelectorAll('.lightmetal-actionbar button'), button => button.getAttribute('aria-pressed')) };
+      });
+      check(`${format}: stateful buttons start unpressed without extra state callbacks`,
+        initialStates.calls === 0 && JSON.stringify(initialStates.pressed) === JSON.stringify(['false', 'false', 'false', 'false', null, 'false', 'false']));
+      const accessible = page.locator('[data-accessibility-test]');
+      const visual = accessible.getByRole('textbox', { name: 'HTML content', exact: true });
+      check(`${format}: visual editing has a name and multiline textbox semantics`,
+        await visual.count() === 1 && await visual.getAttribute('aria-multiline') === 'true');
+      await page.locator('#html-entry-before').focus();
+      check(`${format}: toolbar stays out of the external Tab sequence`, await accessible.locator('.lightmetal-actionbar button').evaluateAll(buttons => buttons.every(button => button.tabIndex === -1)));
+      await page.keyboard.press('Tab');
+      check(`${format}: forward Tab enters visual editing, not the toolbar`, await visual.evaluate(node => node === document.activeElement));
+      await page.keyboard.press('Shift+Tab');
+      check(`${format}: Shift+Tab still reaches the toolbar from visual editing`, await accessible.getByRole('button', { name: 'Custom state', exact: true }).evaluate(node => node === document.activeElement));
+      await page.keyboard.press('Tab');
+      check(`${format}: Tab returns from the last toolbar control to writing`, await visual.evaluate(node => node === document.activeElement));
+      await page.keyboard.press('Tab');
+      check(`${format}: Tab leaves visual editing for the next field`, await page.locator('#html-entry-after').evaluate(node => node === document.activeElement));
+      await page.keyboard.press('Shift+Tab');
+      check(`${format}: backward entry also reaches visual editing`, await visual.evaluate(node => node === document.activeElement));
+      await page.evaluate(() => __lifecycle.select(__lifecycle.accessible, false));
+      const bold = accessible.getByRole('button', { name: 'Bold', exact: true });
+      await bold.click();
+      check(`${format}: formatting exposes the same pressed and visual state`,
+        await bold.getAttribute('aria-pressed') === 'true' && await bold.evaluate(button => button.classList.contains('lightmetal-button-selected')));
+      await bold.click();
+      check(`${format}: toggling formatting off clears both states`,
+        await bold.getAttribute('aria-pressed') === 'false' && !await bold.evaluate(button => button.classList.contains('lightmetal-button-selected')));
+      await page.keyboard.press('Control+b');
+      check(`${format}: native formatting shortcuts refresh pressed state`, await bold.getAttribute('aria-pressed') === 'true');
+      const callbackCounts = await page.evaluate(() => {
+        const state = __lifecycle, before = state.stateCalls;
+        state.accessible.content.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
+        const afterMouse = state.stateCalls;
+        state.accessible.content.dispatchEvent(new KeyboardEvent('keyup', { key: 'ArrowLeft', bubbles: true }));
+        return [afterMouse - before, state.stateCalls - afterMouse];
+      });
+      check(`${format}: state callbacks still run once per existing refresh event`, callbackCounts.every(count => count === 1));
+      await accessible.getByRole('button', { name: 'Custom state', exact: true }).click();
+      check(`${format}: custom state controls expose pressed state`,
+        await accessible.getByRole('button', { name: 'Custom state', exact: true }).getAttribute('aria-pressed') === 'true');
+      const sourceButton = accessible.getByRole('button', { name: 'Source', exact: true });
+      await sourceButton.click();
+      await page.locator('#html-entry-before').focus(); await page.keyboard.press('Tab');
+      check(`${format}: forward entry uses the Source textarea while Source mode is active`,
+        await accessible.getByRole('textbox', { name: 'HTML source', exact: true }).evaluate(node => node === document.activeElement));
+      check(`${format}: Source mode has a named textarea and pressed toggle`,
+        await accessible.getByRole('textbox', { name: 'HTML source', exact: true }).isVisible() &&
+        await sourceButton.getAttribute('aria-pressed') === 'true' && await visual.isHidden());
+      await sourceButton.click();
+      check(`${format}: leaving Source clears its pressed state and restores visual editing`,
+        await sourceButton.getAttribute('aria-pressed') === 'false' && await visual.isVisible());
+      await page.evaluate(() => {
+        const state = __lifecycle;
+        state.nextEntry = state.create({ actions: ['bold'] });
+        state.nextEntry.element.dataset.nextEntry = '';
+        state.nextEntry.setHTML('<p>Second editor</p>');
+        document.getElementById('html-entry-after').before(state.nextEntry.element);
+      });
+      await page.locator('#html-entry-before').focus(); await page.keyboard.press('Tab');
+      await page.keyboard.press('Tab');
+      check(`${format}: Tab between editors enters the next writing field`,
+        await page.locator('[data-next-entry]').getByRole('textbox', { name: 'HTML content', exact: true }).evaluate(node => node === document.activeElement));
+      check(`${format}: leaving an editor removes only its toolbar from Tab order`,
+        await accessible.locator('.lightmetal-actionbar button').evaluateAll(buttons => buttons.every(button => button.tabIndex === -1)));
+      await page.keyboard.press('Tab');
+      check(`${format}: an editor does not trap focus`, await page.locator('#html-entry-after').evaluate(node => node === document.activeElement));
+      await page.evaluate(() => { __lifecycle.accessible.destroy(); __lifecycle.nextEntry.destroy(); });
+
       await page.evaluate(() => {
         const state = window.__lifecycle;
         state.a = state.create({ defaultParagraphSeparator: 'p', styleWithCSS: true });
@@ -246,7 +329,7 @@ module.exports = async function editorLifecycleChecks(page, check) {
           state.select(editor);
           editor.element.querySelector('button[title="Image"]').click();
           const image = !!editor.element.querySelector('input[type="file"]');
-          editor.element.querySelector('button[title="Insert table"]').click();
+          editor.element.querySelector('button[title="Table"]').click();
           const dropdown = editor.element.querySelector('.lightmetal-table-dropdown');
           const table = !!dropdown && !dropdown.hidden;
           editor.destroy();
@@ -269,7 +352,7 @@ module.exports = async function editorLifecycleChecks(page, check) {
         editor.setHTML('<p>content</p>');
         state.select(editor);
         editor.element.querySelector('button[title="Image"]').click();
-        editor.element.querySelector('button[title="Insert table"]').click();
+        editor.element.querySelector('button[title="Table"]').click();
         const builtInUI = !!editor.element.querySelector('input[type="file"], .lightmetal-table-dropdown');
         const unchanged = editor.getHTML() === '<p>content</p>';
         editor.destroy();

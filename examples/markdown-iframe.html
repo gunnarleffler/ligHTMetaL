@@ -4,6 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>ligHTMetaL::MaiDEn — the lightMarkDown Editor — iframe example</title>
+  <link rel="stylesheet" href="../dist/polish.css">
   <style>
     :root { color-scheme: light dark; }
     body { max-width: 900px; margin: 0 auto; padding: 24px; font: 16px/1.6 system-ui, sans-serif; }
@@ -19,7 +20,7 @@
   <h1>Run the whole Markdown editor in an iframe</h1>
   <p>The toolbar and writing area share one iframe. The library stays unchanged:
     its normal, synchronous <code>init()</code> runs inside that document.</p>
-  <p><a href="markdown.html">Inline editor</a> · <a href="markdown.html?mode=isolated">Parent-toolbar experiment</a></p>
+  <p><a href="markdown.html">Inline editor and split-pane preview</a></p>
   <p id="frame-status" role="status">Loading the editor…</p>
   <iframe id="isolated-editor" title="Isolated Markdown editor"></iframe>
   <button id="read-markdown" type="button" disabled>Read Markdown from the frame</button>
@@ -29,11 +30,12 @@
     <textarea id="application-note">Outside the editor.</textarea>
   </label>
   <p>Type in the editor, then in the note, and try the editor's Undo.
-    Tested Chromium and Firefox keep these histories separate.
+    Cross-document focus and history routing depend on the browser/runtime.
     <strong>Linux WebKit can undo the note instead, even across frames.</strong>
+    Some automated Firefox runtimes also misroute parent/child input.
     Check your target browser before relying on iframe history isolation.</p>
   <h2>Markdown reported to the parent</h2>
-  <pre id="frame-output" tabindex="0" aria-label="Markdown from the iframe"></pre>
+  <pre data-code-language="markdown" id="frame-output" tabindex="0" aria-label="Markdown from the iframe"></pre>
   <p>Parent code waits for the frame to load before calling its API. The
     <code>markdownchange</code> event is example glue, not a library event.</p>
   <p>This same-origin frame is not a security sandbox or a cross-browser history guarantee. All
@@ -43,6 +45,7 @@
     <meta charset="utf-8">
     <link rel="stylesheet" href="../dist/lightmetal.css">
     <link rel="stylesheet" href="../dist/maiden.css">
+    <link rel="stylesheet" href="../dist/polish.css">
     <style>
       .lightmarkdown { display: flex; flex-direction: column; height: 100vh; }
       .lightmarkdown-scroll { flex: 1; height: auto; min-height: 0; }
@@ -55,13 +58,17 @@
     </style>
     <div id="editor"></div>
     <script src="../dist/maiden.js"></script>
+    <script src="../dist/MeltDown.js"></script>
+    <script src="../dist/polish.js"></script>
+    <script src="../examples/polish-demo.js"></script>
     <script src="../examples/markdown-iframe-editor.js"></script>
   </template>
+  <script src="../dist/polish.js"></script>
+  <script src="../examples/code-blocks.js"></script>
   <script>
     const frame = document.getElementById("isolated-editor");
-    const output = document.createTextNode("");
-    document.getElementById("frame-output").append(output);
-    frame.addEventListener("markdownchange", event => { output.data = event.detail; });
+    const output = document.getElementById('frame-output');
+    frame.addEventListener('markdownchange', event => { exampleCode.write(output, event.detail, 'markdown'); });
     frame.addEventListener("load", () => {
       const editor = frame.contentWindow.__markdownEditor;
       if (!editor) {
@@ -71,10 +78,10 @@
       document.getElementById("read-markdown").disabled = false;
       document.getElementById("load-markdown").disabled = false;
       document.getElementById("frame-status").textContent = "Ready. The editor runs inside the frame; native undo scope depends on the browser.";
-      output.data = editor.getMarkdown();
+      exampleCode.write(output, editor.getMarkdown(), 'markdown');
     });
     document.getElementById("read-markdown").addEventListener("click", () => {
-      output.data = frame.contentWindow.__markdownEditor.getMarkdown();
+      exampleCode.write(output, frame.contentWindow.__markdownEditor.getMarkdown(), 'markdown');
     });
     document.getElementById("load-markdown").addEventListener("click", () => {
       frame.contentWindow.__markdownEditor.setMarkdown("## Loaded by the parent\n\nStill plain **Markdown**. 🦊\n");

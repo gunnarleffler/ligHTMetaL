@@ -1,8 +1,8 @@
 // Insertion-only browser checks, run by smoke.js in Chromium and Firefox.
 module.exports = async function tableInsertionChecks(page, check) {
   const host = page.locator('[data-table-insertion-test]');
-  const trigger = host.getByRole('button', { name: 'Insert table', exact: true });
-  const popup = host.locator('.lightmetal-table-dropdown');
+  const trigger = host.getByRole('button', { name: 'Table', exact: true });
+  const popup = host.locator('.lightmetal-table-dropdown[role="dialog"]');
   await page.evaluate(() => {
     const host = document.createElement('div');
     host.className = 'lightmetal lightmetal-light';
@@ -31,6 +31,7 @@ module.exports = async function tableInsertionChecks(page, check) {
   };
   const open = async () => {
     await trigger.click();
+    await host.getByRole('menuitem', { name: 'Insert Table…', exact: true }).click();
     await popup.waitFor({ state: 'visible' });
   };
   const html = () => page.evaluate(() => window.__insertion.getHTML());
@@ -56,7 +57,8 @@ module.exports = async function tableInsertionChecks(page, check) {
   await reset();
   const before = await html();
   await open();
-  check('table button exposes its insertion dialog', await trigger.getAttribute('aria-expanded') === 'true' &&
+  check('Table menu opens its insertion dialog', await trigger.getAttribute('aria-haspopup') === 'menu' &&
+    await host.locator('.lightmetal-table-menu [aria-haspopup="dialog"]').getAttribute('aria-expanded') === 'true' &&
     await popup.getAttribute('role') === 'dialog' && await popup.locator('.lightmetal-table-grid button').count() === 80);
   check('manual inputs default to 3×3 and retain the existing maxima',
     await popup.getByLabel('Columns', { exact: true }).inputValue() === '3' && await popup.getByLabel('Rows', { exact: true }).inputValue() === '3' &&
@@ -139,6 +141,7 @@ module.exports = async function tableInsertionChecks(page, check) {
   await reset();
   await trigger.focus();
   await trigger.press('Enter');
+  await page.keyboard.press('Enter');
   await popup.waitFor({ state: 'visible' });
   await page.keyboard.press('ArrowRight');
   await page.keyboard.press('ArrowDown');
@@ -149,10 +152,9 @@ module.exports = async function tableInsertionChecks(page, check) {
   // API and UI both refuse to insert into existing cells.
   const nestedBefore = await html();
   check('API refuses nested table insertion', await page.evaluate(() => window.__insertion.insertTable()) === false && await html() === nestedBefore);
-  await open();
-  await popup.locator('[data-column="2"][data-row="2"]').click();
-  check('dropdown refuses nested insertion and explains why', await html() === nestedBefore &&
-    (await popup.getByRole('status').textContent()).includes('outside a table'));
+  await trigger.click();
+  check('Table menu disables nested insertion', await html() === nestedBefore &&
+    await host.getByRole('menuitem', { name: 'Insert Table…', exact: true }).isDisabled());
   await page.keyboard.press('Escape');
 
   await reset('<p>LeftDELETERight</p>', 4, 10);
@@ -171,7 +173,7 @@ module.exports = async function tableInsertionChecks(page, check) {
   await open();
   await page.setViewportSize({ width: 260, height: 280 });
   await page.waitForFunction(() => {
-    const rect = window.__insertion.element.querySelector('.lightmetal-table-dropdown').getBoundingClientRect();
+    const rect = window.__insertion.element.querySelector('.lightmetal-table-dropdown[role="dialog"]').getBoundingClientRect();
     return rect.left >= 0 && rect.top >= 0 && rect.right <= innerWidth && rect.bottom <= innerHeight;
   });
   const bounded = await popup.evaluate((node) => {
@@ -205,8 +207,9 @@ module.exports = async function tableInsertionChecks(page, check) {
   await reset();
   await open();
   const firstUnchanged = await html();
-  await second.getByRole('button', { name: 'Insert table', exact: true }).click();
-  const secondPopup = second.locator('.lightmetal-table-dropdown');
+  await second.getByRole('button', { name: 'Table', exact: true }).click();
+  await second.getByRole('menuitem', { name: 'Insert Table…', exact: true }).click();
+  const secondPopup = second.locator('.lightmetal-table-dropdown[role="dialog"]');
   check('independent instances have their own grid and close the other popup on outside click',
     await popup.isHidden() && await secondPopup.locator('.lightmetal-table-grid button').count() === 20 &&
     await secondPopup.getByLabel('Columns', { exact: true }).getAttribute('max') === '6');

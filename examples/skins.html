@@ -118,10 +118,7 @@
       document.getElementById("palette").addEventListener("change", (event) => {
         const mode = event.target.value;
         document.documentElement.dataset.mode = mode;
-        for (const editor of Object.values(window.__skinEditors)) {
-          editor.element.classList.toggle("lightmetal-light", mode === "light");
-          editor.element.classList.toggle("lightmetal-dark", mode === "dark");
-        }
+        document.documentElement.dataset.lightmetalTheme = mode;
       });
     </script>
   </body>

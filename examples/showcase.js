@@ -1,5 +1,6 @@
 // Accessible tabs. Hidden editors keep their source and native history intact.
 const tabs = [...document.querySelectorAll('[role="tab"]')];
+let loadReadme;
 function activate(index, focus = false) {
   tabs.forEach((tab, i) => {
     tab.setAttribute('aria-selected', String(i === index));
@@ -7,6 +8,7 @@ function activate(index, focus = false) {
     document.getElementById(tab.getAttribute('aria-controls')).hidden = i !== index;
   });
   if (focus) tabs[index].focus();
+  if (tabs[index].id === 'tab-readme') loadReadme?.();
 }
 tabs.forEach((tab, index) => {
   tab.addEventListener('click', () => activate(index));
@@ -23,16 +25,17 @@ tabs.forEach((tab, index) => {
 const htmlHost = document.getElementById('html-editor');
 if (htmlHost) {
   const output = document.getElementById('html-output');
-  const editor = lightmetal.init({ element: htmlHost, onChange: html => { output.textContent = html; } });
+  const editor = lightmetal.init({ element: htmlHost, onChange: html => { exampleCode.write(output, html, 'html'); } });
   editor.setHTML('<h2>A place for your ideas</h2><p>Write, revise, and keep your content your own. <strong>No cloud required.</strong></p>');
 }
 const markdownHost = document.getElementById('made-editor');
 if (markdownHost) {
   const output = document.getElementById('markdown-output');
-  const editor = maiden.init({ element: markdownHost, preview: { render: meltDown.parse },
-    onChange: text => { output.textContent = text; } });
-  editor.setMarkdown('# Keep the source.\n\nMake **your words** count. Try Preview or Side-by-side.\n\n- Local-first\n- Native undo\n- Your content');
+  const editor = maiden.init({ element: markdownHost, preview: { render: polishDemo.render },
+    onChange: text => { exampleCode.write(output, text, 'markdown'); } });
+  editor.setMarkdown('# Keep the source.\n\nMake **your words** count. Try Preview or Side-by-side.\n\n- Local-first\n- Native undo\n- Your content\n\n```js\nconst message = "A little poliSH.";\n```');
 }
+let renderParserPreview, renderReadmePreview;
 const themeButton = document.getElementById('theme-toggle');
 if (themeButton) {
   const themes = ['auto', 'dark', 'light'];
@@ -41,27 +44,74 @@ if (themeButton) {
     const theme = themes[themeIndex = (themeIndex + 1) % themes.length];
     document.documentElement.classList.toggle('page-dark', theme === 'dark');
     document.documentElement.classList.toggle('page-light', theme === 'light');
-    document.querySelectorAll('.lightmetal').forEach(host => {
-      host.classList.toggle('lightmetal-dark', theme === 'dark');
-      host.classList.toggle('lightmetal-light', theme === 'light');
-    });
+    document.documentElement.dataset.lightmetalTheme = theme;
+    renderParserPreview?.();
+    renderReadmePreview?.();
     themeButton.textContent = 'Theme: ' + theme;
   });
 }
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
+  renderParserPreview?.();
+  renderReadmePreview?.();
+});
 const input = document.getElementById('parser-input');
 if (input) {
   const output = document.getElementById('parser-output');
   const frame = document.getElementById('parser-preview');
   function render() {
-    const html = meltDown.parse(input.value);
-    output.textContent = html;
-    // Strip navigation targets in an inert template before the sandbox renders it.
-    const template = document.createElement('template');
-    template.innerHTML = html;
-    template.content.querySelectorAll('a').forEach(link => link.removeAttribute('href'));
-    // The opaque sandbox and CSP block scripts and external resources.
-    frame.srcdoc = '<!doctype html><meta http-equiv="Content-Security-Policy" content="default-src \'none\'; style-src \'unsafe-inline\'; form-action \'none\'; base-uri \'none\'"><style>body{font:16px/1.6 system-ui,sans-serif;overflow-wrap:anywhere}pre{white-space:pre-wrap}img{display:none}</style>' + template.innerHTML;
+    const html = polishDemo.render(input.value);
+    exampleCode.write(output, html, 'html');
+    polishDemo.preview(frame, html);
   }
+  renderParserPreview = render;
   input.addEventListener('input', render);
   render();
+}
+
+const readmeFrame = document.getElementById('readme-preview');
+if (readmeFrame) {
+  const reload = document.getElementById('readme-reload');
+  const statusText = document.getElementById('readme-status').firstChild;
+  const localPage = location.protocol === 'file:';
+  let source = null, loading = false;
+  function renderReadme(text) {
+    // Only this repository-owned document opts into raw HTML, not editor previews.
+    const html = meltDown.parse(text, { html: 'allow', highlight: polishDemo.highlighter.highlight });
+    polishDemo.preview(readmeFrame, html, {
+      baseURL: document.getElementById('readme-source').href,
+      imageURL: document.querySelector('img.logo').src,
+      headingLinks: true
+    });
+  }
+  renderReadmePreview = () => {
+    if (source !== null) renderReadme(source);
+  };
+  loadReadme = async (force = false) => {
+    if (loading || (!force && source !== null)) return;
+    if (localPage) {
+      reload.disabled = true;
+      statusText.data = 'Use the local demo server to load README.md; browsers block AJAX between local files.';
+      return;
+    }
+    loading = true;
+    reload.disabled = true;
+    readmeFrame.setAttribute('aria-busy', 'true');
+    statusText.data = 'Loading README…';
+    try {
+      const response = await fetch(document.getElementById('readme-source').href, { cache: 'no-store' });
+      if (!response.ok) throw new Error('HTTP ' + response.status);
+      const text = await response.text();
+      renderReadme(text);
+      source = text;
+      readmeFrame.hidden = false;
+      statusText.data = 'Loaded README.md.';
+    } catch (error) {
+      statusText.data = 'Could not load README (' + error.message + '). Try Reload README.';
+    } finally {
+      loading = false;
+      reload.disabled = false;
+      readmeFrame.setAttribute('aria-busy', 'false');
+    }
+  };
+  reload.addEventListener('click', () => loadReadme(true));
 }

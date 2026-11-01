@@ -5,12 +5,13 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>ligHTMetaL::MeltDown — Markdown parser</title>
   <link rel="stylesheet" href="../examples/showcase.css">
+  <link rel="stylesheet" href="../dist/polish.css">
 </head>
 <body>
 <main class="page">
   <h1>ligHTMetaL::MeltDown</h1>
   <p>Markdown in. HTML out. No dependencies.</p>
-  <nav aria-label="Projects"><a href="index.html">All three libraries</a><a href="html.html">HTML editor</a><a href="markdown.html">Markdown editor</a></nav>
+  <nav aria-label="Projects"><a href="index.html">All four libraries</a><a href="html.html">HTML editor</a><a href="markdown.html">Markdown editor</a><a href="polish.html">Syntax highlighter</a></nav>
   <p>A standalone Markdown parser for browsers and Node.js. Parse headings, nested lists, tasks, tables, links, and code. Raw HTML is escaped by default. Add syntax highlighting through a synchronous code-block hook.</p>
   <h2>Try it</h2>
   <label for="parser-input">Markdown source</label>
@@ -28,25 +29,25 @@ Keep **your content** your own.
 const message = 'No dependencies.';
 ```</textarea>
   <div class="columns">
-    <section><h3>HTML output</h3><pre id="parser-output" class="output" tabindex="0" aria-label="Parser HTML output"></pre></section>
-    <section><h3>Rendered result</h3><iframe id="parser-preview" title="Sandboxed parser preview" sandbox="" style="width:100%;height:340px;border:1px solid;border-radius:8px;box-sizing:border-box;background:white"></iframe></section>
+    <section><h3>HTML output</h3><pre data-code-language="html" id="parser-output" class="output" tabindex="0" aria-label="Parser HTML output"></pre></section>
+    <section><h3>Rendered result</h3><iframe id="parser-preview" title="Sandboxed parser preview" sandbox="" style="width:100%;height:340px;border:1px solid;border-radius:8px;box-sizing:border-box"></iframe></section>
   </div>
   <p>This preview blocks scripts, external resources, and navigation. Parsing itself makes no network requests.</p>
   <h2>Quickstart: browser script</h2>
   <p>Copy <code>dist/MeltDown.js</code> beside your page.</p>
-  <pre><code>&lt;script src="MeltDown.js"&gt;&lt;/script&gt;
+  <pre data-code-language="html"><code>&lt;script src="MeltDown.js"&gt;&lt;/script&gt;
 &lt;script&gt;
   const html = meltDown.parse('# Hello');
   console.log(html); // &lt;h1&gt;Hello&lt;/h1&gt;
 &lt;/script&gt;</code></pre>
   <h2>Quickstart: ES modules</h2>
   <p>Copy <code>dist/MeltDown.esm.js</code>. In Node.js, use an ES module context. Serve browser modules over HTTP(S).</p>
-  <pre><code>import { parse } from './MeltDown.esm.js';
+  <pre data-code-language="javascript"><code>import { parse } from './MeltDown.esm.js';
 
 const html = parse('A **bold** idea.');
 // &lt;p&gt;A &lt;strong&gt;bold&lt;/strong&gt; idea.&lt;/p&gt;</code></pre>
   <h2>Bring your own highlighter</h2>
-  <pre><code>const html = meltDown.parse(markdown, {
+  <pre data-code-language="javascript"><code>const html = meltDown.parse(markdown, {
   highlight(code, language) {
     // Return trusted inner HTML from your highlighter.
     // Return null to keep the normal escaped code.
@@ -59,6 +60,9 @@ const html = parse('A **bold** idea.');
   <p class="notice">Use a maintained HTML sanitizer before inserting output from untrusted documents into your page. Raw HTML is escaped by default; <code>{ html: 'allow' }</code> enables pass-through for trusted input. This demo keeps links and external images inactive.</p>
 </main>
 <script src="../dist/MeltDown.js"></script>
+<script src="../dist/polish.js"></script>
+<script src="../examples/code-blocks.js"></script>
+<script src="../examples/polish-demo.js"></script>
 <script src="../examples/showcase.js"></script>
 </body>
 </html>

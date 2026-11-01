@@ -346,12 +346,12 @@ A mismatched Playwright version can report a missing executable even when anothe
 WebKit build is cached. Do not rename browser-cache folders to hide the mismatch.
 The default command still uses Chromium/Firefox.
 
-**Result:** the syntax fixtures, inline API/editing/history checks, and normal
-demo passed. Three groups failed the independent iframe-history requirement:
-the script-free native fixture, the parent-toolbar surface, and the whole-editor
-iframe. The optional command stays nonzero; these failures are not skipped.
-Frame integration checks stop at their first failed history assertion, so this
-is not a full WebKit audit of later integration cases.
+Earlier WebKit checks passed syntax fixtures, inline API/editing/history, and
+the normal demo. Whole-editor iframe checks failed when they required independent
+history after parent-field edits. The native fixture reproduces that limitation.
+The parent-toolbar experiment is removed; cross-document native diagnostics are
+separate from the supported editor workflows. This is not a full WebKit audit or
+Safari coverage.
 
 After editing the child, then a parent textarea, Undo in the child reverted the
 parent textarea and left the child edit in place. This also occurs with a plain
@@ -359,9 +359,11 @@ contenteditable iframe, no editor library, and a real Ctrl+Z. Explicitly focusin
 the child window did not fix it; its document already reported focus during Undo.
 
 Open `tests/fixtures/native-frame-history.html` directly for the script-free
-reproduction. Both tested iframe arrangements isolate history in Chromium/Firefox,
-**not in this Linux WebKit build**. No core workaround, custom history stack, or
-browser sniffing was added. Real Safari on macOS/iOS still needs manual testing.
+reproduction. Whole-editor frame history is browser-dependent: it failed in this
+Linux WebKit build, and current automated Firefox has separate native focus/input
+routing limitations. See the [runtime diagnosis](security-review.md#firefox-runtime-diagnosis).
+No core workaround, custom history stack, or browser sniffing was added.
+Real Safari on macOS/iOS still needs manual testing.
 
 For a manual Safari pass, record the OS and Safari version, then:
 

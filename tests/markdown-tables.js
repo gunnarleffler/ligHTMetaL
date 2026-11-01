@@ -1,6 +1,6 @@
 /* Size-picker GFM insertion: source/container/history checks at a 2×2 size. */
 const assert = require("node:assert/strict");
-const rows = ["| Column 1 | Column 2 |", "| --- | --- |", "|  |  |"];
+const rows = ["| Column 1 | Column 2 |", "| -------- | -------- |", "|          |          |"];
 const table = rows.join("\n");
 const within = prefix => rows.join("\n" + prefix);
 
@@ -18,7 +18,11 @@ async function tableChecks(browser, base, name) {
     assert.equal(await defaultTable.count(), 1, "table belongs to the default toolbar");
     assert.equal(await defaultTable.getAttribute("aria-keyshortcuts"), null, "no new default shortcut");
     assert.deepEqual(await toolbar.getByRole("button").evaluateAll(nodes => nodes.slice(-7).map(node => node.getAttribute("aria-label"))), ["Link", "Image", "Table", "Undo", "Redo", "Fullscreen", "Help"]);
-    const choose = () => page.getByRole("dialog", { name: "Insert table", exact: true }).getByRole("button", { name: "2 columns, 2 rows", exact: true }).click();
+    const choose = async () => {
+      const insert = page.getByRole("menuitem", { name: "Insert Table…", exact: true });
+      if (await insert.isVisible()) await insert.click();
+      await page.getByRole("dialog", { name: "Insert table", exact: true }).getByRole("button", { name: "2 columns, 2 rows", exact: true }).click();
+    };
     await defaultTable.click(); assert.equal(await page.evaluate(() => __markdownChanges.length), 0); await choose();
     assert.equal(await page.evaluate(() => __markdownEditor.getMarkdown()), table);
     assert.equal(await page.evaluate(() => getSelection().toString()), "Column 1");
@@ -26,17 +30,17 @@ async function tableChecks(browser, base, name) {
     await page.keyboard.press("Control+z"); assert.equal(await page.evaluate(() => __markdownEditor.getMarkdown()), "");
     const mount = options => page.evaluate(options => {
       __markdownEditor.destroy(); window.__markdownChanges = [];
-      window.__markdownEditor = __initMarkdown({ element: document.getElementById("editor"), actions: ["table", "undo", "redo"],
-        shortcuts: { table: "Alt+Shift+t" }, ...options, onChange: value => __markdownChanges.push(value) });
+      window.__markdownEditor = __initMarkdown({ element: document.getElementById("editor"), actions: ["table-insert", "undo", "redo"],
+        shortcuts: { "table-insert": "Alt+Shift+t" }, ...options, onChange: value => __markdownChanges.push(value) });
       window.prompt = () => { throw new Error("Unexpected table prompt"); };
     }, options);
     await mount({ actions: ["bold"], shortcuts: false });
     assert.equal(await toolbar.getByRole("button", { name: "Table", exact: true }).count(), 0, "explicit actions can omit table");
     await mount({ shortcuts: false });
-    assert.equal(await toolbar.getByRole("button", { name: "Table", exact: true }).getAttribute("aria-keyshortcuts"), null);
+    assert.equal(await toolbar.getByRole("button", { name: "Insert Table…", exact: true }).getAttribute("aria-keyshortcuts"), null);
     await mount({}); monitor = true;
     const source = page.locator("#editor .lightmarkdown-input");
-    const button = () => toolbar.getByRole("button", { name: "Table", exact: true });
+    const button = () => toolbar.locator('button[aria-label="Insert Table…"],button[aria-label="Table"]');
     const get = () => page.evaluate(() => __markdownEditor.getMarkdown());
     const count = () => page.evaluate(() => __markdownChanges.length - __tableBefore);
     const prepare = (text, start = 0, end = start, shape = "blocks") => page.evaluate(({ text, start, end, shape }) => {
@@ -121,7 +125,7 @@ async function tableChecks(browser, base, name) {
     await prepare("", 0); await source.dispatchEvent("compositionstart"); assert.equal(await button().isDisabled(), true);
     await page.keyboard.press("Alt+Shift+t"); assert.equal(await get(), ""); assert.equal(await count(), 0);
     await source.dispatchEvent("compositionend");
-    await mount({ actions: [], shortcuts: { table: "Alt+Shift+t" } }); await prepare("", 0);
+    await mount({ actions: [], shortcuts: { "table-insert": "Alt+Shift+t" } }); await prepare("", 0);
     assert.equal(await page.locator('#editor [aria-label="Markdown formatting"]').evaluate(node => node.hidden), true);
     await page.keyboard.press("Alt+Shift+t"); await choose(); assert.equal(await get(), table); assert.equal(await count(), 1);
     await page.keyboard.press("Alt+Shift+t"); assert.equal(await get(), table); assert.equal(await count(), 1);
@@ -137,43 +141,36 @@ async function tableChecks(browser, base, name) {
     await page.evaluate(() => { window.__deadTableContent = __markdownEditor.content; __markdownEditor.destroy(); });
     assert.equal(await page.evaluate(() => !__deadTableContent.dispatchEvent(new KeyboardEvent("keydown", { key: "T", altKey: true, shiftKey: true, bubbles: true, cancelable: true }))), false);
     monitor = false;
-    for (const mode of ["whole", "surface"]) {
-      await page.goto(base + (mode === "whole" ? "/examples/markdown-iframe.html" : "/examples/markdown.html?mode=isolated"));
-      if (mode === "whole") {
-        await page.waitForFunction(() => !document.getElementById("read-markdown").disabled);
-        await page.frameLocator("#isolated-editor").locator(".lightmarkdown-input").evaluate(node => {
-          const win = node.ownerDocument.defaultView, host = node.closest(".lightmarkdown"); win.__markdownEditor.destroy(); win.__tableChanges = 0;
-          win.__markdownEditor = win.maiden.init({ element: host, actions: ["table", "undo", "redo"], onChange: () => win.__tableChanges++ });
-        });
-      } else {
-        await page.waitForFunction(() => window.__markdownEditor && __markdownMode === "isolated");
-        await page.evaluate(async () => {
-          __markdownEditor.destroy(); window.__tableChanges = 0;
-          window.__markdownEditor = await __initMarkdownSurface({ element: document.getElementById("markdown-editor"), actions: ["table", "undo", "redo"], onChange: () => __tableChanges++ });
-        });
-      }
-      const view = page.frameLocator(mode === "whole" ? "#isolated-editor" : ".lightmarkdown-surface-frame");
-      const input = view.locator(".lightmarkdown-input"), bar = (mode === "whole" ? view : page).getByRole("group", { name: "Markdown formatting" });
-      const read = () => mode === "whole" ? input.evaluate(node => node.ownerDocument.defaultView.__markdownEditor.getMarkdown()) : page.evaluate(() => __markdownEditor.getMarkdown());
+    {
+      await page.goto(base + "/examples/markdown-iframe.html");
+      await page.waitForFunction(() => !document.getElementById("read-markdown").disabled);
+      const view = page.frameLocator("#isolated-editor");
+      const input = view.locator(".lightmarkdown-input"), bar = view.getByRole("group", { name: "Markdown formatting" });
+      await input.evaluate(node => {
+        const win = node.ownerDocument.defaultView, host = node.closest(".lightmarkdown"); win.__markdownEditor.destroy(); win.__tableChanges = 0;
+        win.__markdownEditor = win.maiden.init({ element: host, actions: ["table", "undo", "redo"], onChange: () => win.__tableChanges++ });
+      });
+      const read = () => input.evaluate(node => node.ownerDocument.defaultView.__markdownEditor.getMarkdown());
       await input.evaluate(node => {
         const doc = node.ownerDocument, range = doc.createRange(); range.selectNodeContents(node); range.collapse(false);
         node.focus(); doc.getSelection().removeAllRanges(); doc.getSelection().addRange(range); node.dispatchEvent(new Event("focus"));
       });
-      const frameTable = "| Column 1 | Column 2 | Column 3 | Column 4 |\n| --- | --- | --- | --- |";
-      const before = mode === "whole" ? await input.evaluate(node => node.ownerDocument.defaultView.__tableChanges) : await page.evaluate(() => __tableChanges);
+      const frameTable = "| Column 1 | Column 2 | Column 3 | Column 4 |\n| -------- | -------- | -------- | -------- |";
+      const before = await input.evaluate(node => node.ownerDocument.defaultView.__tableChanges);
       monitor = true; await bar.getByRole("button", { name: "Table", exact: true }).click();
-      const popup = (mode === "whole" ? view : page).getByRole("dialog", { name: "Insert table", exact: true });
+      await view.getByRole("menuitem", { name: "Insert Table…", exact: true }).click();
+      const popup = view.getByRole("dialog", { name: "Insert table", exact: true });
       await popup.getByRole("spinbutton", { name: "Columns", exact: true }).fill("4");
       await popup.getByRole("spinbutton", { name: "Rows", exact: true }).fill("1");
       await popup.getByRole("button", { name: "Insert", exact: true }).click();
       assert.equal(await read(), frameTable); assert.equal(await input.evaluate(node => node.ownerDocument.getSelection().toString()), "Column 1");
-      assert.equal(mode === "whole" ? await input.evaluate(node => node.ownerDocument.defaultView.__tableChanges) : await page.evaluate(() => __tableChanges), before + 1);
+      assert.equal(await input.evaluate(node => node.ownerDocument.defaultView.__tableChanges), before + 1);
       await page.keyboard.insertText("Name"); assert.equal(await read(), frameTable.replace("Column 1", "Name"));
       await page.keyboard.press("Control+z"); assert.equal(await read(), frameTable);
       await page.keyboard.press("Control+z"); assert.equal(await read(), ""); monitor = false;
     }
     assert.deepEqual(errors, []); assert.deepEqual(requests, []);
-    console.log(`${name}: default/configurable table picker insertion, empty-line/container guards, first-header selection, callbacks/native history, save/reload, composition, custom/keyboard-only and both iframe paths: ok`);
+    console.log(`${name}: default/configurable table picker insertion, empty-line/container guards, first-header selection, callbacks/native history, save/reload, composition, custom/keyboard-only and whole-editor iframe: ok`);
   } finally { await page.close(); }
 }
 module.exports = { tableChecks };

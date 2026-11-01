@@ -12,8 +12,4 @@ h2 { font-size: 1.15rem; }
 body.experiment-frame { max-width: none; margin: 0; padding: 0; background: transparent; }
 #outside, textarea { box-sizing: border-box; width: 100%; border: 1px solid; padding: 8px; }
 #raw { white-space: pre-wrap; overflow-wrap: anywhere; }
-.lightmetal .experiment-actionbar { display: flex; gap: 4px; padding: 4px; background: var(--lightmetal-bg-toolbar); }
-.lightmetal .experiment-button { min-width: 32px; padding: 5px; color: var(--lightmetal-color); }
-.lightmetal .experiment-content { padding: 13px; }
-.lightmetal .experiment-selected { outline: 1px solid currentColor; }
 @media (max-width: 650px) { .grid { grid-template-columns: minmax(0, 1fr); } }

@@ -166,36 +166,32 @@ async function stateChecks(browser, base, name) {
       assert.equal(await button(title).getAttribute("aria-pressed"), "true");
     }
     assert.deepEqual(await page.evaluate(() => __stateCalls), ["link", "undo", "redo"]); assert.equal(await count(), 0);
-    for (const mode of ["whole", "surface"]) {
-      await page.goto(base + (mode === "whole" ? "/examples/markdown-iframe.html" : "/examples/markdown.html?mode=isolated"));
-      if (mode === "whole") await page.waitForFunction(() => !document.getElementById("read-markdown").disabled);
-      else await page.waitForFunction(() => window.__markdownEditor && __markdownMode === "isolated");
-      const view = page.frameLocator(mode === "whole" ? "#isolated-editor" : ".lightmarkdown-surface-frame");
+    {
+      await page.goto(base + "/examples/markdown-iframe.html");
+      await page.waitForFunction(() => !document.getElementById("read-markdown").disabled);
+      const view = page.frameLocator("#isolated-editor");
       const input = view.locator(".lightmarkdown-input");
-      const bar = (mode === "whole" ? view : page).getByRole("group", { name: "Markdown formatting" });
-      const read = () => mode === "whole" ? input.evaluate(node => node.ownerDocument.defaultView.__markdownEditor.getMarkdown()) : page.evaluate(() => __markdownEditor.getMarkdown());
+      const bar = view.getByRole("group", { name: "Markdown formatting" });
+      const read = () => input.evaluate(node => node.ownerDocument.defaultView.__markdownEditor.getMarkdown());
       const flags = async () => {
         const native = await input.evaluate(node => ["undo", "redo"].map(command => node.ownerDocument.queryCommandEnabled(command)));
         const enabled = await bar.locator('button[aria-label="Undo"],button[aria-label="Redo"]').evaluateAll(nodes => nodes.map(node => !node.disabled));
-        assert.deepEqual(enabled, native, mode + ": child-owned native availability");
+        assert.deepEqual(enabled, native, "whole-editor iframe native availability");
       };
-      if (mode === "whole") await input.evaluate(node => node.ownerDocument.defaultView.__markdownEditor.setMarkdown("metal"));
-      else await page.evaluate(() => { __markdownEditor.setMarkdown("metal"); document.getElementById("history-demo").open = true; });
+      await input.evaluate(node => node.ownerDocument.defaultView.__markdownEditor.setMarkdown("metal"));
       await input.evaluate(node => {
         const doc = node.ownerDocument, range = doc.createRange(); range.setStart(node.firstChild.firstChild, 5); range.collapse(true);
         node.focus(); doc.getSelection().removeAllRanges(); doc.getSelection().addRange(range);
       });
-      await flags(); await page.keyboard.type("X"); assert.equal(await read(), "metalX", mode + ": native typing"); await flags();
+      await flags(); await page.keyboard.type("X"); assert.equal(await read(), "metalX", "whole-editor iframe native typing"); await flags();
       const undo = bar.getByRole("button", { name: "Undo", exact: true }), redo = bar.getByRole("button", { name: "Redo", exact: true });
       await undo.focus(); await flags(); await page.keyboard.press("Enter"); assert.equal(await read(), "metal"); await flags();
       await redo.focus(); await page.keyboard.press("Space"); assert.equal(await read(), "metalX"); await flags();
-      const note = page.locator(mode === "whole" ? "#application-note" : "#history-note");
-      await note.fill("outside"); await note.press("End"); await page.keyboard.type("!"); await flags();
+      // Cross-document input routing is covered separately by native-frame-focus.js.
       await input.focus(); await page.keyboard.press("Control+z"); assert.equal(await read(), "metal"); await flags();
-      assert.equal(await note.inputValue(), "outside!", mode + ": child history leaves parent untouched");
+      await page.keyboard.press("Control+Shift+z"); assert.equal(await read(), "metalX"); await flags();
       await page.keyboard.press("Escape"); await page.keyboard.press("Shift+Tab");
       const last = bar.locator("button:enabled").last();
-      if (!await last.evaluate(node => node === node.ownerDocument.activeElement)) await page.keyboard.press("Shift+Tab");
       assert.equal(await last.evaluate(node => node === node.ownerDocument.activeElement), true);
     }
     assert.deepEqual(errors, []); assert.deepEqual(remote, []);

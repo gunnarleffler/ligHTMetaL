@@ -25,12 +25,55 @@ async function previewChecks(browser, base, name) {
     assert.equal(await page.getByRole("button", { name: "Bold", exact: true }).isDisabled(), true);
     await button.click();
     assert.equal(await page.evaluate(() => document.activeElement === __markdownEditor.content && getSelection().focusOffset === 3 && __markdownEditor.content.firstChild === __sourceNode && __changes.length === __before), true);
+    await page.evaluate(() => {
+      window.__largePreview = '<pre><code>' + Array(2000).fill('<span class="token keyword">const</span>').join('') + '</code></pre>spare root text';
+      window.__render = () => __largePreview;
+    });
+    await button.click(); await preview.locator('pre:not([hidden])').waitFor();
+    await page.evaluate(() => {
+      const target = document.querySelector('.lightmarkdown-preview');
+      window.__retainedPre = target.querySelector('pre');
+      window.__retainedSpan = __retainedPre.querySelector('span');
+      window.__retainedText = target.lastChild;
+      window.__render = () => '<p>small</p>';
+      __markdownEditor.setMarkdown('small');
+    });
+    await preview.getByText('small', { exact: true }).waitFor();
+    assert.equal(await page.evaluate(async () => {
+      let count = 0;
+      const observer = new MutationObserver(records => { count += records.length; });
+      observer.observe(__retainedPre, { subtree: true, attributes: true, characterData: true });
+      observer.observe(__retainedText, { characterData: true });
+      for (let i = 0; i < 20; i++) {
+        __markdownEditor.setMarkdown('small ' + i);
+        // renderPreview commits synchronous renderer results in a Promise callback.
+        await Promise.resolve();
+      }
+      count += observer.takeRecords().length;
+      observer.disconnect();
+      return count;
+    }), 0, 'already-cleared spare elements and Text nodes do not receive mutations');
+    await page.evaluate(() => { window.__render = () => __largePreview; __markdownEditor.setMarkdown('large again'); });
+    await preview.locator('pre:not([hidden])').waitFor();
+    assert.equal(await page.evaluate(() => {
+      const target = document.querySelector('.lightmarkdown-preview');
+      return target.querySelector('pre') === __retainedPre && __retainedPre.querySelector('span') === __retainedSpan &&
+        !__retainedSpan.hidden && __retainedSpan.textContent === 'const' && target.lastChild === __retainedText && __retainedText.data === 'spare root text';
+    }), true, 'cleared spare nodes revive with their identity and content intact');
+    await button.click();
     await page.evaluate(() => { window.__render = () => '<script>window.__bad = true</script><img src="https://example.invalid/image" alt="photo"><iframe src="https://example.invalid/frame"></iframe><a href="javascript:alert(1)" onclick="alert(1)">bad</a><pre><code class="hljs evil"><span class="hljs-keyword" style="background:url(https://example.invalid/style)">const</span></code></pre>'; });
-    await button.click(); await preview.locator("code").waitFor();
+    await button.click(); await preview.locator("code:visible").waitFor();
     assert.equal(await preview.locator("script,img,iframe,[onclick],[style],[href]").count(), 0);
-    assert.equal(await preview.locator("code").getAttribute("class"), "hljs");
-    assert.equal(await preview.locator("span").getAttribute("class"), "hljs-keyword");
+    assert.equal(await preview.locator("code:visible").getAttribute("class"), "hljs");
+    assert.equal(await preview.locator("span:visible").getAttribute("class"), "hljs-keyword");
     assert.match(await preview.textContent(), /\[Image: photo\]/);
+    await button.click();
+    await page.evaluate(() => { window.__render = () => '<pre><code><span class="token keyword evil" style="color:red" onclick="alert(1)">const</span><span class="keyword">plain</span><span class="token madeup">unknown</span></code></pre>'; });
+    await button.click();
+    assert.equal(await preview.locator('span:visible').nth(0).getAttribute('class'), 'token keyword');
+    assert.equal(await preview.locator('span:visible').nth(1).getAttribute('class'), null);
+    assert.equal(await preview.locator('span:visible').nth(2).getAttribute('class'), 'token');
+    assert.equal(await preview.locator('[style],[onclick],.evil,.madeup').count(), 0);
     await button.click();
     await page.evaluate(() => { window.__render = () => new Promise(resolve => window.__resolve = resolve); });
     await button.click();

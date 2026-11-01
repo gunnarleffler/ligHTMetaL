@@ -9,6 +9,7 @@
 #   lightmetal.min.css  minified styles
 #   maiden.*            optional Markdown companion: IIFE, minified, ESM, CSS
 #   MeltDown.*          optional ligHTMetaL::MeltDown parser: IIFE, minified, ESM
+#   polish.*            optional full-catalog syntax highlighter, CSS themes
 #   skins/*.css         optional skins, plain and minified
 #
 # Run `npm install` first.
@@ -35,6 +36,14 @@ mkdir -p "$DIST"
 "$ESBUILD" "$SRC/MeltDown.js" --bundle --format=iife --global-name=meltDown --target=es2020 --minify --outfile="$DIST/MeltDown.min.js"
 "$ESBUILD" "$SRC/MeltDown.js" --bundle --format=esm --target=es2020 --outfile="$DIST/MeltDown.esm.js"
 
+# Capture indices require modern RegExp support (ES2022); no polyfills are bundled.
+"$ESBUILD" "$SRC/polish-full.js" --bundle --format=iife --global-name=polish --target=es2022 --outfile="$DIST/polish.js"
+"$ESBUILD" "$SRC/polish-full.js" --bundle --format=iife --global-name=polish --target=es2022 --minify --outfile="$DIST/polish.min.js"
+"$ESBUILD" "$SRC/polish-full.js" --bundle --format=esm --target=es2022 --outfile="$DIST/polish.esm.js"
+node "$ROOT/build/polish-css.mjs"
+cp "$SRC/polish.css" "$DIST/polish.css"
+"$ESBUILD" "$SRC/polish.css" --minify --outfile="$DIST/polish.min.css"
+
 cp "$SRC/maiden.css" "$DIST/maiden.css"
 "$ESBUILD" "$SRC/maiden.css" --minify --outfile="$DIST/maiden.min.css"
 
@@ -55,4 +64,5 @@ echo "dist/lightmetal.min.js  $(bytes "$DIST/lightmetal.min.js") bytes gzip"
 echo "dist/lightmetal.esm.js  $(bytes "$DIST/lightmetal.esm.js") bytes gzip"
 echo "dist/lightmetal.css     $(bytes "$DIST/lightmetal.css") bytes gzip"
 echo "dist/maiden.min.js $(bytes "$DIST/maiden.min.js") bytes gzip"
+echo "dist/polish.min.js $(bytes "$DIST/polish.min.js") bytes gzip"
 echo "Built dist/ from src/"

@@ -1,6 +1,11 @@
 # ligHTMetaL::MeltDown
 
-**Markdown in. HTML out. No dependencies.**
+**Markdown in. HTML out. Useful defaults. No dependencies.**
+
+Heading links, tables, and tasks work without switches. Sensible defaults escape
+raw HTML and reject executable link schemes. Explicit raw mode means raw HTML,
+not another layer of surprising filters. Keep the detailed safety guidance in
+[Destination policy and escaping](#destination-policy-and-escaping).
 
 Parse headings, nested lists, tables, code, and inline formatting in browsers or Node.js. Bring your own syntax highlighter through a code-block hook. MeltDown escapes raw HTML by default. The prebuilt files need no build step.
 
@@ -16,7 +21,7 @@ Copy `dist/MeltDown.esm.js` into your project and import `parse`:
 ```js
 import { parse } from './MeltDown.esm.js';
 
-parse('# Hello'); // '<h1>Hello</h1>'
+parse('# Hello'); // '<h1 id="hello">Hello</h1>'
 parse('A **bold** paragraph.'); // '<p>A <strong>bold</strong> paragraph.</p>'
 ```
 
@@ -34,6 +39,19 @@ Load the prebuilt standalone script to expose `window.meltDown`:
   console.log(meltDown.parse('# Hello'));
 </script>
 ```
+
+## Heading links
+
+Markdown headings get IDs by default, so `[Jump to details](#details)` links to
+`## Details`. IDs use lowercase text with inline formatting removed, discard
+punctuation, and replace whitespace with hyphens. Unicode letters and numbers
+remain intact. Repeated IDs get `-1`, `-2`, and so on across the whole document;
+numbering resets with each parse. Punctuation-only headings use `section`.
+Literal code and escaped HTML stay part of the heading text. Slugs decode numeric
+references and the common escapes `amp`, `lt`, `gt`, `quot`, `apos`, `nbsp`, and
+`colon`; other named references are omitted from IDs, not from rendered text.
+For example, `Caf&#233;` gets `café`, while `Caf&eacute;` gets `caf`.
+Raw HTML headings pass through unchanged in raw mode.
 
 ## Supported syntax
 
@@ -56,7 +74,7 @@ Load the prebuilt standalone script to expose `window.meltDown`:
 | Inline code | Matching backtick runs, including multi-backtick spans and soft newlines. |
 | Hard line breaks | Two or more spaces, or an unescaped backslash, before a newline. |
 | Links / images | Inline destinations, optional quoted titles, and reference forms. |
-| Autolinks | Angle-bracket HTTP(S), telephone, mailto, and email links; no bare-URL/number detection. |
+| Autolinks | Bare HTTP(S) URLs and angle-bracket HTTP(S), telephone, mailto, and email links. |
 | Raw HTML | Escaped by default; inline tags and HTML blocks are passed through with `{ html: 'allow' }`. |
 | Image dimensions | Optional numeric `=W`, `=WxH`, `=Wx`, or `=xH`; pixels or percentages. |
 | Escapes | Backslash-escaped ASCII punctuation outside code. |
@@ -106,6 +124,7 @@ Code spans require equal-length backtick runs, turn internal newlines into space
 ### Autolinks and phone/email links
 
 ```markdown
+https://example.com
 <https://example.com>
 <you@example.com>
 <tel:+15551234567>
@@ -121,7 +140,10 @@ These work in both HTML modes. Autolink labels remain literal rather than interp
 - `tel:` is **links-only**. Numbers may have a leading `+`, digits, parentheses, dots, and hyphens, plus an optional numeric `;ext=` suffix. At least one digit is required; spaces, USSD strings, and other telephone URI parameters are outside this subset. Put a nicely formatted number in the link label and a compact number in its destination.
 - `mailto:` is **links-only**. It supports unquoted ASCII mailbox syntax, comma-separated recipients, and optional query parameters such as `subject`/`body`. Encode query spaces as `%20` and use a raw `&` between parameters. This is syntax checking, not verification that an address exists; quoted/internationalized addresses and the full mailto RFC grammar are not implemented.
 - Both schemes also work through reference links and are rejected for **direct and reference Markdown images**.
-- Bare phone numbers, email addresses, and URLs remain text. Autolinks are not activated inside code, escaped angle brackets, or Markdown link labels.
+- Bare HTTP(S) addresses become links automatically. Sentence punctuation stays
+  outside the link; balanced parentheses in URL paths stay inside. Bare phone
+  numbers and email addresses remain text. Autolinks are not activated inside
+  code, escaped angle brackets, HTML attributes, or Markdown link labels.
 - Clicking a link may open the device's dialer/mail client; behavior depends on the browser, OS, installed handlers, and host application. Parsing itself never initiates a call or sends mail.
 
 ### Tables
@@ -191,7 +213,7 @@ Generated text and attribute quotes are escaped. In prose, valid-looking semicol
 
 ## Deliberate limits
 
-- Not full CommonMark/GFM: no bare-URL/email/number linking, footnotes, multiline reference definitions/titles, arbitrary fence info strings, or lazy/unindented list/quote continuations. Raw HTML recognition follows the bounded rules above, not a full HTML grammar.
+- Not full CommonMark/GFM: no bare-email/number linking, footnotes, multiline reference definitions/titles, arbitrary fence info strings, or lazy/unindented list/quote continuations. Raw HTML recognition follows the bounded rules above, not a full HTML grammar.
 - Setext headings are single-line. List marker numbers are limited to nine digits. Quoted lines must retain their `>` marker.
 - Emphasis uses a bounded token-pairing implementation, not an exhaustive CommonMark delimiter implementation. Ambiguous malformed inputs may render differently from other parsers.
 - References are matched textually, not by decoding HTML entities in identifiers. Attribute entities stay literal even when the equivalent prose entity displays as a glyph.
@@ -240,39 +262,32 @@ const editor = maiden.init({
 });
 ```
 
-### highlight.js with explicit languages
+### poliSH with selected languages
 
-Install highlight.js in your application and register only the languages you need.
-This example uses a bundler; load your chosen highlight.js theme CSS separately.
-The library remains optional and is not bundled into MeltDown or MaiDEn.
+Import only the languages you need, or use the full-catalog poliSH build.
+Load `polish.css` and choose a theme for the rendered output. The highlighter
+remains optional; neither MeltDown nor MaiDEn imports it.
 
 ```js
 import { parse } from './dist/MeltDown.esm.js';
-import hljs from 'highlight.js/lib/core';
-import javascript from 'highlight.js/lib/languages/javascript';
-import bash from 'highlight.js/lib/languages/bash';
+import { createHighlighter } from './src/polish.js';
+import javascript from './src/polish/languages/javascript.js';
+import bash from './src/polish/languages/bash.js';
 
-hljs.registerLanguage('javascript', javascript);
-hljs.registerLanguage('bash', bash);
-
-const render = markdown => parse(markdown, {
-  highlight(code, language) {
-    if (!language || !hljs.getLanguage(language)) return null;
-    return hljs.highlight(code, { language, ignoreIllegals: true }).value;
-  }
-});
-
+const highlighter = createHighlighter({ languages: [javascript, bash] });
+const render = markdown => parse(markdown, { highlight: highlighter.highlight });
 const editor = maiden.init({
   element: document.getElementById('editor'),
   preview: { render }
 });
+editor.element.querySelector('.lightmarkdown-preview')
+  .classList.add('polish', 'theme-dark');
 ```
 
-A fence such as ` ```bash ` selects Bash; unknown languages and unlabelled code
-remain escaped plain text. For opt-in auto-detection, return
-`hljs.highlightAuto(code, ['javascript', 'bash']).value` when `language` is empty.
-Auto-detection considers registered languages only, can misidentify short snippets,
-and adds work. The explicit-language approach is the recommended default.
+A fence such as ` ```bash ` selects Bash; unknown labels stay escaped plain text.
+Unlabelled code uses conservative guessing among registered languages. Set
+`guessLanguage: false` to disable guessing. See the [poliSH guide](poliSH.md)
+for themes, language loading, and standalone use.
 
 ## Maintenance
 

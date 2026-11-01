@@ -40,12 +40,13 @@ async function fullscreenChecks(browser, base, name) {
     assert.equal(await page.getByRole('button', { name: 'Preview', exact: true }).getAttribute('aria-pressed'), 'true');
     assert.equal(await page.getByRole('region', { name: 'Markdown preview' }).isVisible(), true);
     // Optional iframe layout fills its own viewport, not the embedding page.
-    await page.goto(base + '/examples/markdown.html?mode=isolated');
-    await page.waitForFunction(() => window.__markdownMode === 'isolated' && window.__markdownEditor);
-    await page.getByRole('button', { name: 'Fullscreen', exact: true }).click();
-    assert.equal(await page.frameLocator('iframe').locator('.lightmarkdown-fullscreen').evaluate(node => node.getBoundingClientRect().height === node.ownerDocument.defaultView.innerHeight), true);
-    await page.frameLocator('iframe').getByRole('textbox', { name: 'Markdown source' }).press('Escape');
-    assert.equal(await page.getByRole('button', { name: 'Fullscreen', exact: true }).getAttribute('aria-pressed'), 'false');
+    await page.goto(base + '/examples/markdown-iframe.html');
+    await page.waitForFunction(() => !document.getElementById('read-markdown').disabled);
+    const frame = page.frameLocator('#isolated-editor');
+    await frame.getByRole('button', { name: 'Fullscreen', exact: true }).click();
+    assert.equal(await frame.locator('.lightmarkdown-fullscreen').evaluate(node => node.getBoundingClientRect().height === node.ownerDocument.defaultView.innerHeight), true);
+    await frame.getByRole('textbox', { name: 'Markdown source' }).press('Escape');
+    assert.equal(await frame.getByRole('button', { name: 'Fullscreen', exact: true }).getAttribute('aria-pressed'), 'false');
     // Keyboard-only use and application-owned classes/styles survive teardown.
     await page.goto(base + '/tests/fixtures/markdown.html'); await page.waitForFunction(() => window.__markdownEditor);
     await page.evaluate(() => {
