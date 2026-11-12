@@ -1,11 +1,9 @@
 # Markdown source commands
 
-The agreed M3 command/writing scope is implemented. This page covers headings,
-inline formatting, code and link templates, lists/tasks/quotes, writing keys,
-horizontal rules, toolbar separators, and configurable command shortcuts. The
-implemented M4 slices add image templates, existing-URL selection, fixed table
-insertion, and row/column/alignment editing. See
-[the milestone plan](specs/markdown-editor-spec.md) for the remaining work and
+Command selection, editing and state rules for headings, inline formatting,
+code/link/image templates, lists/tasks/quotes, writing keys, tables, toolbar
+separators and shortcuts. See
+[the specification](specs/markdown-editor-spec.md) for deferred scope and
 [syntax rules](markdown-syntax.md) for recognition.
 
 ## Bold, Italic, and Strike-through
@@ -613,6 +611,16 @@ checked; an all-checked selection becomes unchecked. Already checked `[X]`
 spelling stays intact when checking a mixed selection. The controls use the
 recognizer's first-paragraph task rules, including source tabs in brackets.
 Headings and literal task-looking text are not treated as existing tasks.
+
+Click a recognized source checkbox (`[ ]`, `[x]`,
+or `[X]`) to toggle that single task. This works without adding task actions to
+the toolbar. It uses the same recognition and native edit path as the commands.
+Only the character inside the brackets changes; Undo restores its original
+spelling, including tabs or uppercase `X`. An existing editor caret or selection
+returns after the click. Click beside the marker to move the caret instead.
+Dragging and modified clicks keep their native behavior and do not toggle tasks.
+Composition disables toggling. The source half of split view supports clicks;
+the rendered preview remains read-only.
 
 Direct targets inside fenced/indented code or literal HTML are skipped. All-skipped
 selections disable the controls. Wrapping or moving a parent item/quote may change

@@ -1,8 +1,7 @@
-# Markdown syntax work (M2)
+# Markdown source syntax
 
-**M2 is complete for the agreed recognition scope.** The suite has 318 cases.
-Broader conformance and formal performance/cache budgets remain follow-up work,
-not blockers for M3. This is not a production-readiness claim.
+MaiDEn's source recognizer has 318 fixtures for the dialect below. They do not
+establish full CommonMark/GFM conformance or performance/cache guarantees.
 
 ## Baseline and scope
 
@@ -15,10 +14,12 @@ conformance suite. `markdown-gfm.json` pins selected extension rules to
 **GFM 0.29-gfm (2019-04-06)**: <https://github.github.com/gfm/>. CommonMark 0.31.2
 remains the core baseline. These fixtures do not establish full compliance.
 
-This batch improves the existing source tokenizer. It adds no parser dependency,
-renderer, editing engine, public API, or toolbar defaults.
+Source recognition is separate from rendering and editing commands. It creates
+no links, image requests, checkbox widgets or table grids. Explicit commands and
+[source task clicks](markdown-commands.md#task-markers-and-protected-source) can
+edit the Markdown through native operations.
 
-| Area | Covered in this batch |
+| Area | Recognition coverage |
 | --- | --- |
 | ATX headings | Empty content, levels 1–6, opening separators, optional closing hashes, escaped/attached hashes, and code in heading content. |
 | Setext headings | Underlines apply to the whole preceding ordinary paragraph. Blank lines, indentation, ATX headings, and container boundaries prevent false matches. |
@@ -37,7 +38,7 @@ renderer, editing engine, public API, or toolbar defaults.
 
 ## Logical paragraphs, native editing
 
-The highlighter now analyzes logical Markdown lines before painting. It groups
+The source recognizer analyzes logical Markdown lines before painting. It groups
 ordinary paragraph lines, resolves Setext underlines, and splits inline tokens
 back into their original source lines. Browser-created DIV, P, BR, and nested-span
 shapes do not decide Markdown paragraph boundaries.
@@ -84,9 +85,9 @@ boundaries use full recognized link/image/reference/autolink ranges; candidate
 checks preserve containers and untouched literal/task source.
 
 Code, link destinations, and titles are protected during pairing. Single/double
-strike now shares the iterative delimiter stack; runs of three or more tildes stay
+strike shares the iterative delimiter stack; runs of three or more tildes stay
 literal. Code keeps its existing code style inside strike. Bold/Italic/Strike
-commands and active states now share resolved pairs and protected ranges from
+commands and active states share resolved pairs and protected ranges from
 this pass. Source positions map through the same tab/container boundaries as
 painting. The metadata lives only in the local syntax snapshot, not in a
 cross-event cache. See [command behavior](markdown-commands.md).
@@ -136,10 +137,9 @@ syntax case across every layout:
 - Native-edit, undo/redo, node-identity, callback, and targeted mapping regressions
   still run. The matrix reduction does not skip those checks.
 
-That is **433 fixture configurations per browser**, down from 1,908. Every
-configuration retains the same source, style, geometry, identity, callback, and
-inert-HTML assertions. No syntax fixtures were removed. Subset names live beside
-the matrix in `tests/markdown-syntax.js`; missing or renamed fixtures fail loudly.
+That is **433 fixture configurations per browser**. Each asserts source, style,
+geometry, identity, callbacks and inert HTML. Subset names live beside the matrix
+in `tests/markdown-syntax.js`; missing or renamed fixtures fail loudly.
 
 For a deliberate mapping, painting, or layout audit, run the full cross-product:
 
@@ -229,18 +229,10 @@ parsing and prevent enclosing links. Angle brackets use marker styling; labels
 use link styling. Typed schemes are not insertion URLs: even executable-looking
 source remains inert and unchanged. GFM bare autolinks are described below.
 
-There are 41 original HTML/autolink fixtures plus three generated stress cases.
-Browser tests cover completion, callbacks, untouched source nodes, and native
-undo/redo. The existing HTML safety fixture now correctly treats fence-looking
-lines after an unclosed type-seven block as literal HTML-block contents.
-
-Development comparisons use installed MarkdownIt, not a runtime dependency.
-Across 2,650 normative/generated samples, remaining differences are confined to
-self-closing raw-tag names and DEL in autolinks. Follow CommonMark 0.31.2: `<pre/>`
-does not satisfy type one and cannot start type seven; DEL is an ASCII control
-and cannot appear in a URI autolink. Both rules have fixtures. With HTML enabled,
-the earlier 1,511 reference samples now agree, including the former autolink
-precedence difference. These diagnostics do not establish conformance.
+Follow CommonMark 0.31.2: `<pre/>` does not satisfy type one and cannot start
+type seven; DEL is an ASCII control and cannot appear in a URI autolink. Fixtures
+cover both rules, HTML-block precedence, completion, callbacks, untouched source
+nodes and native Undo/Redo.
 
 ## Reference links and definitions
 
@@ -264,9 +256,8 @@ covered by the context pass above.
 
 ## Selected GFM extensions
 
-The user approved GFM 0.29-gfm extension rules over the existing CommonMark 0.31.2
-baseline, including single-tilde strike. Implementation and focused review are
-complete. The work remains unpublished.
+Use GFM 0.29-gfm extension rules over CommonMark 0.31.2, including single-tilde
+strike.
 
 - Strike uses the existing iterative delimiter stack. Equal one- or two-tilde
   runs pair; longer runs remain literal. Labels scope delimiters as they do for
@@ -288,52 +279,28 @@ complete. The work remains unpublished.
   code, HTML, destinations, markers, and resolved labels. Overlapping domain
   suffixes share host validation rather than rescanning invalid tails.
 
-There are 69 original GFM fixtures and six generated GFM stress cases. Together
-with the earlier fixtures, the suite has **318 cases**. Existing single/triple
-strike snapshots now reflect the approved dialect. Chromium/Firefox full Markdown
-checks pass, including native edits to strike, task markers, table delimiters, and
-bare links. Those tests assert callbacks and untouched following nodes through
-undo/redo. Inert-source checks now also reject generated inputs and tables.
+Regression fixtures cover malformed hosts, underscore boundaries, and URL paths
+inside failed labels, plus successful inline/reference/image labels. Native-edit
+checks retain callback counts, grouped Undo/Redo and untouched following nodes.
+Inert-source checks reject generated inputs and tables.
 
-Development-only diagnostics agree with all 27 selected published GFM examples
-on source preservation, styled letters, and task counts. An expanded 1,782-sample
-comparison has three differences: MarkdownIt treats four-tilde runs in nested
-strike as delimiters, while the pinned GFM rules leave runs of three or more
-literal. These checks are not a conformance claim or a new project dependency.
-
-The focused review fixed all three bare-link findings: quadratic invalid-host
-rescans, missed underscore boundaries inside failed labels, and Markdown parsing
-inside failed-label URL paths. Regression fixtures cover successful inline,
-reference, and image labels too. A native edit test turns a failed label into a
-valid link and checks callbacks, grouped undo/redo, and untouched following nodes.
-
-Verification: builds are updated; full Chromium/Firefox Markdown and package
-checks pass. After the last three fixture additions, the targeted syntax suite
-passes all 318 cases in both browsers. The final diff is reviewed. A development
-host-scanner differential probe matches 132,645 candidate offsets across 12,000
-samples; the prior 24,912 emphasis and 5,696 inline-link comparisons still agree.
-No new WebKit run, tag, or release has happened.
-
-## Follow-up validation (not M2 blockers)
+## Validation limits
 
 - Broader CommonMark/GFM conformance, malformed-input, and container coverage.
 - Controlled large-document performance, cache high-water memory, and formal budgets.
-- Real input, accessibility, and Safari validation under M1, when app integration
-  makes manual testing practical. Existing Linux WebKit isolation limits remain.
+- Real input and accessibility validation follow the
+  [approved release scope](releasing.md#approved-validation-scope). Linux WebKit
+  isolation limits remain; its results do not establish Safari support.
 - Reassess parser dependencies or tokenizer structure only with approval.
 
-The agreed M3 command/state scope now shares recognition boundaries and literal
-context guards; see [command behavior](markdown-commands.md). Candidate checks
-protect structural edits, and the browser supplies native history availability.
-Neither milestone makes a full CommonMark/GFM, Safari, accessibility, or
-production-readiness claim.
+Commands share recognition boundaries and literal-context guards; see
+[command behavior](markdown-commands.md). Candidate checks protect structural
+edits; the browser supplies native history availability.
 
 ## Safari and Linux WebKit
 
 Playwright offers WebKit on Linux. It is a useful engine-level check, **not
 Safari**: browser integration, OS services, clipboard, fonts, and input can differ.
-The user installed WebKit; the first run used Node 26.11.1, Playwright 1.64.0,
-and Linux WebKit 26.6. No packages or browser assets were installed by the agent.
 
 Run the optional checks with the same Node/global Playwright installation that
 downloaded the browser:
@@ -346,12 +313,10 @@ A mismatched Playwright version can report a missing executable even when anothe
 WebKit build is cached. Do not rename browser-cache folders to hide the mismatch.
 The default command still uses Chromium/Firefox.
 
-Earlier WebKit checks passed syntax fixtures, inline API/editing/history, and
-the normal demo. Whole-editor iframe checks failed when they required independent
-history after parent-field edits. The native fixture reproduces that limitation.
-The parent-toolbar experiment is removed; cross-document native diagnostics are
-separate from the supported editor workflows. This is not a full WebKit audit or
-Safari coverage.
+Linux WebKit inline checks cover syntax, API/editing/history and the normal demo.
+Whole-editor iframe history is not isolated from parent-field edits in the tested
+runtime. Cross-document native diagnostics are separate from supported editor
+workflows; this is not a full WebKit audit or Safari coverage.
 
 After editing the child, then a parent textarea, Undo in the child reverted the
 parent textarea and left the child edit in place. This also occurs with a plain
@@ -362,10 +327,9 @@ Open `tests/fixtures/native-frame-history.html` directly for the script-free
 reproduction. Whole-editor frame history is browser-dependent: it failed in this
 Linux WebKit build, and current automated Firefox has separate native focus/input
 routing limitations. See the [runtime diagnosis](security-review.md#firefox-runtime-diagnosis).
-No core workaround, custom history stack, or browser sniffing was added.
-Real Safari on macOS/iOS still needs manual testing.
-
-For a manual Safari pass, record the OS and Safari version, then:
+Do not mask runtime behavior with a custom history stack or browser sniffing.
+Native Safari validation is outside the project's required scope. If a maintainer
+chooses an optional manual pass, record the OS and Safari version, then:
 
 1. Open `/markdown.html`. Type/select text, apply formatting, and try native
    Undo/Redo after typing, Enter, Backspace, and paragraph joins.

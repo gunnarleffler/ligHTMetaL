@@ -6,7 +6,7 @@ Technical contracts, grammar authoring, and language boundaries. See [the poliSH
 
 poliSH is an independent, DOM-free JavaScript ESM highlighter in the lightmetal editor suite. It has zero runtime dependencies and requires no TypeScript compiler or build step. Development uses Node.js 22+; browser targets are current evergreen Chrome/Edge, Firefox, and Safari, including native regex capture indices.
 
-The current catalog contains **49 opt-in lexical starter grammars**, plus a built-in ANSI-to-HTML rendering mode. Starter coverage means representative classification fixtures, malformed/source-preservation tests, and integration checks exist—not full language conformance or mature real-world accuracy. Complete snippets and source display are the intended use; editing/incremental highlighting is not implemented.
+The current catalog contains **49 opt-in lexical starter grammars**, plus a built-in ANSI-to-HTML rendering mode. Starter coverage means representative classification fixtures, malformed/source-preservation tests, and integration checks exist—not full language conformance or mature real-world accuracy. Complete snippets and source display are the intended use. MaiDEn can repaint complete code snippets while editing through the optional token hook; incremental tokenization is not implemented.
 
 Architecture:
 
@@ -86,6 +86,12 @@ The HTML methods require primitive string source/language arguments, except omit
 | Unknown name | Escaped plain text normally; strict mode throws |
 
 `ansi`, `plain`, and `text` cannot be registered over. HTML methods return contents without wrappers, DOM nodes, or Promises. Strict mode exposes engine/grammar errors, not syntax-validation failures. The ordinary HTML hook discards diagnostics.
+
+`highlightTokens(source, language)` is a callback-safe source-painter hook. It
+uses the same language resolution as `highlight`, including optional guessing,
+and returns `{ tokens, diagnostics }` without HTML. Explicit `ansi` returns plain
+tokens to preserve every control and source offset. It exposes no strict-mode
+option; detailed explicit-language control remains available through `tokenize`.
 
 `tokenize` requires an explicit string language option. An unknown syntax language produces plain tokens and an `unknown-language` warning, or throws in strict mode. `plain`/`text` produce no warning. Requesting `ansi` here does not interpret SGR state: use the HTML facade or converter instead.
 

@@ -1,0 +1,21 @@
+/* Showcase-only page styles; never imported by the component. */
+:root { color-scheme: var(--lightmetal-color-scheme, light dark); }
+body { margin: 0; color: light-dark(#24292f, #e6e9ee); background: light-dark(#eef1f6, #101216); font: 15px/1.5 system-ui, sans-serif; }
+header { display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap; }
+.theme-control { display: flex; align-items: center; gap: 8px; }
+.theme-control select { padding: 6px; font: inherit; }
+main { max-width: 1440px; margin: auto; padding: 24px; }
+h1 { margin-bottom: 0; letter-spacing: -.04em; }
+header p { margin-top: 0; }
+.notice { border-left: 4px solid light-dark(#556ee7, #8fa0ff); padding: 12px; background: light-dark(#fff, #1e2126); }
+#editor { height: clamp(560px, 85vh, 1000px); }
+.host-controls { margin-top: 24px; }
+.actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.actions button, .demo-actions button { padding: 8px 12px; font: inherit; cursor: pointer; }
+.demo-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; margin: 12px 0; }
+.demo-actions span { font-size: 12px; }
+textarea { display: block; box-sizing: border-box; width: 100%; padding: 10px; font: 12px/1.5 ui-monospace, monospace; }
+#error { color: light-dark(#b42318, #ffb4ad); overflow-wrap: anywhere; }
+a { color: light-dark(#435dc6, #8fa0ff); }
+footer { margin-top: 24px; }
+@media (max-width: 520px) { main { padding: 12px; } #editor { height: clamp(480px, 80svh, 760px); } }

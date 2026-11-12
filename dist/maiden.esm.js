@@ -1,8 +1,8 @@
 // src/toolbar-groups.js
 var groups = [
-  ["bold", "italic", "underline", "strikethrough"],
-  ["heading1", "heading2", "paragraph"],
-  ["quote", "ulist", "olist"],
+  ["bold", "italic", "underline", "strikethrough", "script", "font", "formatting"],
+  ["headings", "heading1", "heading2", "paragraph"],
+  ["quote", "ulist", "olist", "indentation", "alignment"],
   ["code", "codeblock"],
   ["line", "link", "image", "table"],
   ["undo", "redo"],
@@ -79,6 +79,28 @@ function paintPreview(target, source) {
     cursor = cursor.nextSibling;
   }
 }
+function imageURL(value, base, origin) {
+  if (!value || /[\u0000-\u001f\u007f]/.test(value)) return null;
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  if (/^data:/i.test(trimmed)) {
+    if (!/^data:image\/(?:png|jpeg|gif|webp);base64,[a-z0-9+/]+={0,2}$/i.test(trimmed)) return null;
+    try {
+      atob(trimmed.slice(trimmed.indexOf(",") + 1));
+      return trimmed;
+    } catch {
+      return null;
+    }
+  }
+  try {
+    const url = new URL(trimmed, base);
+    if (["http:", "https:"].includes(url.protocol)) return url.href;
+    if (url.protocol === "blob:" && origin && origin !== "null" && url.origin === origin) return url.href;
+    return null;
+  } catch {
+    return null;
+  }
+}
 function previewHTML(document2, html) {
   const template = document2.createElement("template");
   template.innerHTML = html;
@@ -98,7 +120,24 @@ function previewHTML(document2, html) {
       }
       if (blocked.has(node.localName)) continue;
       if (node.localName === "img") {
-        target.append(document2.createTextNode("[Image: " + (node.getAttribute("alt") || "image") + "]"));
+        const src = imageURL(node.getAttribute("src"), document2.baseURI, document2.location?.origin);
+        if (!src) {
+          target.append(document2.createTextNode("[Image: " + (node.getAttribute("alt") || "image") + "]"));
+          continue;
+        }
+        const image = document2.createElement("img");
+        for (const attr of ["alt", "title"]) if (node.hasAttribute(attr)) image.setAttribute(attr, node.getAttribute(attr));
+        for (const attr of ["width", "height"]) {
+          const value = node.getAttribute(attr);
+          if (value && /^\d+$/.test(value) && Number(value) > 0 && Number(value) <= 4294967295) image.setAttribute(attr, String(Number(value)));
+        }
+        for (const [attr, values] of [["loading", ["lazy", "eager"]], ["decoding", ["async", "sync", "auto"]]]) {
+          const value = node.getAttribute(attr)?.trim().toLowerCase();
+          if (values.includes(value)) image.setAttribute(attr, value);
+        }
+        image.referrerPolicy = "no-referrer";
+        image.src = src;
+        target.append(image);
         continue;
       }
       if (!allowed.has(node.localName)) {
@@ -127,6 +166,108 @@ function previewHTML(document2, html) {
   const fragment = document2.createDocumentFragment();
   clean(template.content, fragment);
   return fragment;
+}
+
+// src/markdown-source-highlight.js
+var kinds = /* @__PURE__ */ new Set(["plain", "comment", "keyword", "string", "number", "boolean", "constant", "function", "type", "variable", "property", "operator", "punctuation", "tag", "attribute"]);
+function checkedTokens(result, length) {
+  if (!Array.isArray(result?.tokens)) return [];
+  let end = 0;
+  const tokens = [];
+  for (const token of result.tokens) {
+    if (!token || token.start !== end || !Number.isSafeInteger(token.end) || token.end <= end || token.end > length || !kinds.has(token.kind)) return [];
+    tokens.push({ start: end, end: token.end, kind: token.kind });
+    end = token.end;
+  }
+  return end === length ? tokens : [];
+}
+function createSourceHighlighter(highlight) {
+  let cache = /* @__PURE__ */ new Map();
+  return (source, lines, current) => {
+    const raw = source.split("\n"), jobs = [], fences = /* @__PURE__ */ new Set(), regions = /* @__PURE__ */ new Set();
+    const segment = (part, start = part.bodyStart, end = raw[part.index].length) => ({ line: part.index, start, end });
+    for (const part of lines) {
+      if (part.fence && !fences.has(part.fence)) {
+        const block = part.fence;
+        fences.add(block);
+        const opening = raw[block.parts[0].index].slice(block.parts[0].bodyStart);
+        const language = /^ {0,3}(?:`{3,}|~{3,})\s*(\S*)/.exec(opening)?.[1] || "";
+        const body = block.parts.slice(1, block.close ? -1 : void 0);
+        if (body.length) jobs.push({ language, segments: body.map((part2) => segment(part2)) });
+      }
+      for (const region of part.regions || []) regions.add(region);
+    }
+    for (const region of regions) {
+      for (const pair of region.pairs) {
+        if (pair.name !== "code") continue;
+        let low = 0, high = lines.length - 1;
+        while (low < high) {
+          const middle = Math.ceil((low + high) / 2);
+          if (lines[middle].sourceStart <= pair.content) low = middle;
+          else high = middle - 1;
+        }
+        const segments = [];
+        for (let i = low; i < lines.length && lines[i].sourceStart <= pair.close; i++) {
+          const part = lines[i];
+          segments.push(segment(part, Math.max(part.bodyStart, pair.content - part.sourceStart), Math.min(raw[i].length, pair.close - part.sourceStart)));
+        }
+        if (segments.length) jobs.push({ language: "", segments });
+      }
+    }
+    const next = /* @__PURE__ */ new Map(), colors = /* @__PURE__ */ new Map();
+    for (const { language, segments } of jobs) {
+      const code = segments.map(({ line, start, end }) => raw[line].slice(start, end)).join("\n");
+      const key = JSON.stringify([language, code]);
+      let tokens = next.get(key) || cache.get(key);
+      if (!tokens) {
+        try {
+          tokens = checkedTokens(highlight(code, language), code.length);
+        } catch {
+          tokens = [];
+        }
+        if (!current()) return false;
+      }
+      next.set(key, tokens);
+      let offset = 0, index = 0;
+      for (const { line, start, end } of segments) {
+        const limit = offset + end - start;
+        while (index < tokens.length && tokens[index].end <= offset) index++;
+        for (let at = index; at < tokens.length && tokens[at].start < limit; at++) {
+          const token = tokens[at];
+          if (token.kind === "plain") continue;
+          if (!colors.has(line)) colors.set(line, []);
+          colors.get(line).push({
+            start: start + Math.max(offset, token.start) - offset,
+            end: start + Math.min(limit, token.end) - offset,
+            kind: token.kind
+          });
+        }
+        offset = limit + 1;
+      }
+    }
+    cache = next;
+    for (const [line, ranges] of colors) {
+      ranges.sort((a, b) => a.start - b.start);
+      const painted = [];
+      let offset = 0, index = 0;
+      for (const token of lines[line].tokens) {
+        const end = offset + token.text.length;
+        while (offset < end) {
+          while (index < ranges.length && ranges[index].end <= offset) index++;
+          const range = ranges[index], colored = range && range.start <= offset;
+          const stop = Math.min(end, range ? colored ? range.end : range.start : end);
+          painted.push({
+            text: raw[line].slice(offset, stop),
+            className: token.className + (colored ? " token " + range.kind : "")
+          });
+          offset = stop;
+        }
+        if (!token.text) painted.push(token);
+      }
+      lines[line].tokens = painted;
+    }
+    return true;
+  };
 }
 
 // src/maiden.js
@@ -2135,6 +2276,8 @@ function init(settings = {}) {
   if (!element || element.nodeType !== 1 || element.ownerDocument !== document) throw new TypeError("element must be an element in this document.");
   if (onChange != null && typeof onChange !== "function") throw new TypeError("onChange must be a function.");
   if (mounted.has(element)) throw new TypeError("This element already has a Markdown editor.");
+  if (settings.sourceHighlight != null && typeof settings.sourceHighlight !== "function") throw new TypeError("sourceHighlight must be a function.");
+  const highlightSource = settings.sourceHighlight ? createSourceHighlighter(settings.sourceHighlight) : null;
   const previewRender = settings.preview?.render;
   if (settings.preview != null && (typeof settings.preview !== "object" || typeof previewRender !== "function")) throw new TypeError("preview.render must be a function.");
   const actions = resolveActions(settings.actions ?? (previewRender ? [...defaults.slice(0, -2), "preview", "side-by-side", "fullscreen", "guide"] : void 0));
@@ -2310,6 +2453,7 @@ function init(settings = {}) {
     const model = owns(savedRange) ? textModel(content) : null;
     const value = model ? model.text : getMarkdown();
     const syntax = markdownTokens(value);
+    if (highlightSource && !highlightSource(value, syntax, () => !destroyed && version === renderVersion)) return;
     if (previewing) renderPreview(value);
     updateStatus(model || textModel(content), value);
     paintSource.paint(content, paint, syntax);
@@ -2435,6 +2579,68 @@ function init(settings = {}) {
       }
     }
     return replace(plan.start, plan.end, plan.value, plan.anchor, plan.focus);
+  }
+  function taskAtPoint(event) {
+    const caret = document.caretPositionFromPoint?.(event.clientX, event.clientY);
+    const fallback = !caret && document.caretRangeFromPoint?.(event.clientX, event.clientY);
+    const node = caret?.offsetNode || fallback?.startContainer;
+    if (!node || !content.contains(node)) return null;
+    const model = textModel(content), offset = model.offset(node, caret ? caret.offset : fallback.startOffset);
+    if (offset == null) return null;
+    if (!/\[[ \txX]\]/.test(model.text.slice(Math.max(0, offset - 3), offset + 3))) return null;
+    const syntax = markdownTokens(model.text), part = syntax[model.text.slice(0, offset).split("\n").length - 1];
+    const marker = part.taskMarker;
+    if (!marker || part.protected) return null;
+    const start = part.sourceStart + marker.start, end = part.sourceStart + marker.end;
+    const a = model.point(start), b = model.point(end), range = document.createRange();
+    range.setStart(a.node, a.offset);
+    range.setEnd(b.node, b.offset);
+    if (!Array.from(range.getClientRects()).some((rect) => event.clientX >= rect.left && event.clientX < rect.right && event.clientY >= rect.top && event.clientY < rect.bottom)) return null;
+    return { model, syntax, start, end };
+  }
+  let taskPointer = null;
+  const plainTaskClick = (event) => !event.defaultPrevented && event.button === 0 && !event.ctrlKey && !event.metaKey && !event.altKey && !event.shiftKey && !destroyed && !composing && !(previewing && !sideBySide);
+  function beginTaskClick(event) {
+    taskPointer = null;
+    if (!plainTaskClick(event) || event.detail > 1) return;
+    const hit = taskAtPoint(event);
+    if (!hit) return;
+    const selection = document.getSelection();
+    const owned = selection.rangeCount && owns(selection.getRangeAt(0));
+    taskPointer = {
+      text: hit.model.text,
+      start: hit.start,
+      end: hit.end,
+      anchor: owned ? hit.model.offset(selection.anchorNode, selection.anchorOffset) : hit.end,
+      focus: owned ? hit.model.offset(selection.focusNode, selection.focusOffset) : hit.end,
+      x: event.clientX,
+      y: event.clientY,
+      version: renderVersion,
+      view: previewVersion
+    };
+  }
+  function finishTaskClick(event) {
+    const snapshot = taskPointer;
+    taskPointer = null;
+    if (!snapshot || !plainTaskClick(event) || event.detail !== 1 || snapshot.version !== renderVersion || snapshot.view !== previewVersion || Math.hypot(event.clientX - snapshot.x, event.clientY - snapshot.y) > 4) return;
+    const hit = taskAtPoint(event);
+    if (!hit || hit.model.text !== snapshot.text || hit.start !== snapshot.start || hit.end !== snapshot.end) return;
+    const selection = document.getSelection();
+    if (!selection.isCollapsed && (hit.model.offset(selection.anchorNode, selection.anchorOffset) !== snapshot.anchor || hit.model.offset(selection.focusNode, selection.focusOffset) !== snapshot.focus)) return;
+    const units = writingSelection("task-toggle", hit.model.text, hit.start, hit.end, hit.syntax);
+    const changes = writingChanges("task-toggle", hit.model.text, units, hit.syntax);
+    if (changes.length !== 1) return;
+    const [change] = changes;
+    event.preventDefault();
+    const anchor = snapshot.anchor ?? hit.end, focus = snapshot.focus ?? hit.end;
+    edit(() => {
+      replace(change.start, change.end, change.value, Math.min(anchor, focus), Math.max(anchor, focus));
+      if (!destroyed && anchor > focus) {
+        const model = textModel(content), a = model.point(anchor), b = model.point(focus);
+        document.getSelection().setBaseAndExtent(a.node, a.offset, b.node, b.offset);
+        remember();
+      }
+    });
   }
   function indent(unindent) {
     resetKeyboardHint();
@@ -3144,12 +3350,12 @@ function init(settings = {}) {
       section("TLDR", "Write paragraphs with a blank line between them. Select text and use the toolbar, or type Markdown markers yourself. Preview, when configured, shows the rendered result.", "# A heading\n\nA paragraph with **bold** and *italic* text.");
       section("Emphasis", "Wrap text in matching markers.", "**bold**\n*italic*\n~~strikethrough~~");
       section("Headings", "Start a line with one to six hash marks and a space. More marks mean a smaller heading level.", "# Heading 1\n## Heading 2\n### Heading 3\n#### Heading 4\n##### Heading 5\n###### Heading 6");
-      section("Lists and tasks", "Use bullets or numbers for lists. Task markers add an unchecked or checked item. Enter continues a list; Enter on an empty item leaves one level.", "- First item\n- Second item\n\n1. First step\n2. Next step\n\n- [ ] To do\n- [x] Done");
+      section("Lists and tasks", "Use bullets or numbers for lists. Task markers add an unchecked or checked item. Click a source task marker to check or uncheck it; the preview stays read-only. Enter continues a list; Enter on an empty item leaves one level.", "- First item\n- Second item\n\n1. First step\n2. Next step\n\n- [ ] To do\n- [x] Done");
       section("Links", "Put the label in brackets and the destination in parentheses.", "[Visit the example](https://example.com)");
       section("Quotes", "Start each quoted line with > and a space.", "> A quoted thought.\n> Continued on another line.");
       section("Images", "The text in brackets describes the image. Use a URL or a relative path; this editor does not upload files or fetch images while you edit source.", "![A fox beside a tree](images/fox.png)");
       section("Tables", "Separate cells with pipes and put a dash row below the header. Spaces do not need to line up. Colons in the dash row set left, center, or right alignment.", "| Name | Notes |\n| --- | --- |\n| Fox | In the woods |\n| Owl | Near the barn |\n\n| Left | Center | Right |\n| :--- | :---: | ---: |\n| A | B | C |");
-      section("Code", "Use backticks for inline code. For a code block, put triple backticks on their own lines. An optional language name can help a configured preview renderer highlight code.", '`inline code`\n\n```javascript\nconst greeting = "Hello";\n```');
+      section("Code", "Use backticks for inline code. For a code block, put triple backticks on their own lines. An optional language name selects code colors when source highlighting or a preview highlighter is configured.", '`inline code`\n\n```javascript\nconst greeting = "Hello";\n```');
       section("Paragraphs and rules", "Leave a blank line between paragraphs. Put --- on a separate line with blank lines around it for a horizontal rule, not a heading underline.", "First paragraph.\n\nSecond paragraph.\n\n---\n\nAfter the rule.");
       section("Literal markers", "Put a backslash before punctuation when you want the marker itself, not formatting.", "\\*literal asterisks\\*");
       const editing = document.createElement("p");
@@ -3409,6 +3615,14 @@ function init(settings = {}) {
     listen(node, "pointerdown", resetKeyboardHint);
     listen(node, "mousedown", resetKeyboardHint);
   }
+  listen(content, "pointerdown", beginTaskClick);
+  listen(content, "pointermove", (event) => {
+    if (taskPointer && Math.hypot(event.clientX - taskPointer.x, event.clientY - taskPointer.y) > 4) taskPointer = null;
+  });
+  for (const type of ["pointerleave", "pointercancel", "contextmenu"]) listen(content, type, () => {
+    taskPointer = null;
+  });
+  listen(content, "click", finishTaskClick);
   listen(content, "input", () => {
     emptyFormat = null;
     resetKeyboardHint();

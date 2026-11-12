@@ -2,7 +2,7 @@
 const assert = require("node:assert/strict");
 
 const skinNames = ["bootstrap", "material-classic", "material-outline", "frost", "patina", "sterling", "substantial"];
-const expectedWidths = ["36px", "36px", "36px", "34px", "34px", "32px", "32px"];
+const expectedWidths = skinNames.map(() => "36px");
 
 function contrast(foreground, background, backdrop) {
   const parse = color => color.match(/[\d.]+/g).map(Number);
@@ -175,18 +175,20 @@ async function runSkinChecks(browser, url, distPrefix) {
           await host.getByRole("button", { name: "Insert row below", exact: true }).click();
           assert.equal(await host.locator("tr").count(), 3);
           assert.equal(await page.evaluate((name) => window.__skinEditors[name].insertImage("javascript:alert(1)"), name), false);
-          assert.equal(await host.locator(".lightmetal-error").isVisible(), true);
-          // Do not let the error's later dismissal shift another test's target.
-          await host.locator(".lightmetal-error").evaluate((node) => node.remove());
+          assert.equal(await host.locator(".lightmetal-error").count(), 0);
         }
       }
       await page.setViewportSize({ width: 390, height: 700 });
       for (const name of ['default', ...skinNames]) {
         const host = page.locator(`[data-skin-check="${name}"]`);
+        await page.waitForFunction(name => {
+          const node = document.querySelector(`[data-skin-check="${name}"] .lightmetal-actionbar`);
+          return node.scrollWidth <= node.clientWidth;
+        },name);
         assert.equal(await host.locator(".lightmetal-actionbar").evaluate((node) => {
           const style = getComputedStyle(node);
-          return style.overflowX === "auto" && style.flexWrap === "nowrap" && node.getBoundingClientRect().right <= innerWidth;
-        }), true, `${name}: toolbar must scroll horizontally without overflowing the page`);
+          return style.overflowX === "hidden" && style.flexWrap === "nowrap" && node.getBoundingClientRect().right <= innerWidth && node.scrollWidth <= node.clientWidth;
+        }), true, `${name}: toolbar must use overflow without horizontal clipping or page overflow`);
         await host.evaluate(node => {
           const before = document.createElement('button'); before.id = 'skin-entry-before'; before.textContent = 'Before editor'; node.before(before);
         });
@@ -221,6 +223,7 @@ async function runGalleryChecks(browser, base) {
   try {
     const response = await page.goto(base);
     assert.equal(response.status(), 200);
+    await page.getByRole('tab', { name: 'HTML Editor', exact: true }).click();
     await page.getByRole("link", { name: "Explore HTML editor skins", exact: true }).click();
     assert.equal(new URL(page.url()).pathname, "/skins.html");
     for (const route of ["skins.html", "examples/skins.html"]) {

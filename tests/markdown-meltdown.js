@@ -2,11 +2,15 @@
 const assert = require("node:assert/strict");
 const path = require("node:path");
 const { buildSync } = require("esbuild");
+const { setMarkdownView } = require('./browser-checks');
 async function meltdownChecks(browser, base, name) {
   const page = await browser.newPage();
   const errors = [], requests = []; let monitor = false;
   page.on("pageerror", error => errors.push(error.message));
   page.on("request", request => { if (monitor) requests.push(request.url()); });
+  await page.route('https://example.invalid/photo.png', route => route.fulfill({
+    contentType: 'image/png', body: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII=', 'base64')
+  }));
   try {
     await page.goto(base + "/tests/fixtures/markdown.html");
     await page.waitForFunction(() => window.__markdownEditor);
@@ -40,6 +44,7 @@ async function meltdownChecks(browser, base, name) {
       if (mode === "iframe") await page.waitForFunction(() => !document.getElementById("read-markdown").disabled);
       else await page.waitForFunction(() => window.__markdownEditor);
       const view = mode === "iframe" ? page.frames().find(frame => frame.parentFrame() === page.mainFrame()) : page;
+      await setMarkdownView(view, 'source');
       await view.evaluate(() => {
         __markdownEditor.setMarkdown('# MeltDown\n\n**Hello** and ~~goodbye~~.\n\n- [x] Done\n\n| A | B |\n| --- | --- |\n| one | two |\n\n```js\nconst answer = 42;\n```\n\n<img src="https://example.invalid/html">\n\n![photo](https://example.invalid/photo.png)');
         const source = __markdownEditor.content; source.focus();
@@ -50,12 +55,13 @@ async function meltdownChecks(browser, base, name) {
       const preview = view.getByRole("region", { name: "Markdown preview" });
       const button = view.getByRole("button", { name: "Preview", exact: true });
       await button.click(); await preview.getByRole("heading", { name: "MeltDown", exact: true }).waitFor();
-      assert.equal(await preview.locator("strong").textContent(), "Hello");
-      assert.equal(await preview.locator("table tbody td").count(), 2);
-      assert.match(await preview.textContent(), /☑\s+Done/);
-      assert.match(await preview.textContent(), /<img src=/);
-      assert.equal(await preview.locator("img,script,iframe,input").count(), 0);
-      assert.match(await preview.textContent(), /\[Image: photo\]/);
+      assert.equal(await preview.locator("strong:visible").textContent(), "Hello");
+      assert.equal(await preview.locator("table tbody td:visible").count(), 2);
+      assert.match(await preview.innerText(), /☑\s+Done/);
+      assert.match(await preview.innerText(), /<img src=/);
+      assert.equal(await preview.locator("script,iframe,input").count(), 0);
+      assert.equal(await preview.locator('img[alt="photo"]').count(), 1);
+      await view.waitForFunction(() => { const image = document.querySelector('.lightmarkdown-preview img'); return image?.complete && image.naturalWidth > 0; });
       await button.click();
       assert.equal(await view.evaluate(() => __markdownEditor.getMarkdown() === __meltText && __meltNodes.every((node, i) => node === __markdownEditor.content.childNodes[i]) && __markdownEditor.content.ownerDocument.getSelection().focusOffset === 2), true);
     }
@@ -76,8 +82,8 @@ async function meltdownChecks(browser, base, name) {
     assert.ok(await highlighted.locator(".language-bash span").count() > 0);
     assert.equal(await highlighted.locator(".language-unknown").textContent(), "<tag>");
     assert.equal(await highlighted.locator(".language-unknown span").count(), 0);
-    assert.deepEqual(errors, []); assert.deepEqual(requests, []);
-    console.log(name + ": ligHTMetaL::MeltDown standalone/minified/ESM, MaiDEn standard/optional iframe preview, inert output/no requests and source restoration: ok");
+    assert.deepEqual(errors, []); assert.deepEqual(requests, ['https://example.invalid/photo.png', 'https://example.invalid/photo.png']);
+    console.log(name + ": ligHTMetaL::MeltDown standalone/minified/ESM, MaiDEn inline/iframe preview, approved image loads and source restoration: ok");
   } finally { await page.close(); }
 }
 module.exports = { meltdownChecks };

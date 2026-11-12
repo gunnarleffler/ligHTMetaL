@@ -14,6 +14,8 @@ const { formattingChecks } = require("./markdown-formatting");
 const { codeChecks } = require("./markdown-code");
 const { codeBackgroundChecks } = require("./markdown-code-background");
 const { painterChecks } = require("./markdown-painter");
+const { sourceHighlightChecks } = require("./markdown-source-highlight");
+const { taskClickChecks } = require("./markdown-task-click");
 const { toolbarGroupChecks } = require("./toolbar-groups");
 const { substantialChecks } = require("./substantial");
 const { writingChecks } = require("./markdown-writing");
@@ -31,6 +33,7 @@ const { tablePickerChecks } = require("./markdown-table-picker");
 const { statusChecks } = require("./markdown-status");
 const { guideChecks } = require("./markdown-guide");
 const { previewChecks } = require("./markdown-preview");
+const { previewImageChecks } = require("./markdown-preview-images");
 const { meltdownChecks } = require("./markdown-meltdown");
 const { polishChecks } = require('./markdown-polish');
 const { fullscreenChecks } = require("./markdown-fullscreen");
@@ -535,7 +538,11 @@ async function demoChecks(browser, base, name) {
   await page.goto(base + "/markdown.html");
   await page.waitForFunction(() => window.__markdownEditor);
   const initial = await page.evaluate(() => initialMarkdown);
+  assert.equal(initial, await page.evaluate(() => markdownSamples.full), 'main demo uses the shared editable document');
   assert.equal(await page.locator("#raw").textContent(), initial);
+  assert.equal(await page.getByRole('button', { name: 'Side-by-side', exact: true }).getAttribute('aria-pressed'), 'true');
+  await page.locator('.lightmarkdown-preview h1').waitFor();
+  assert.equal(await page.evaluate(() => document.activeElement === document.body && scrollY === 0), true);
   async function geometry() {
     const delta = await page.evaluate(() => {
       const input = __markdownEditor.content;
@@ -577,13 +584,17 @@ async function iframeExampleChecks(browser, base, name) {
     await page.goto(url);
     await page.waitForFunction(() => !document.getElementById("read-markdown").disabled);
     assert.equal(await page.evaluate(() => typeof window.maiden), "undefined", "Only the frame loads the editor library");
+    assert.equal(await page.evaluate(() => document.activeElement === document.body && scrollY === 0), true, 'iframe split startup preserves parent focus and scroll');
     assert.equal(await page.evaluate(() => {
       const frame = document.getElementById("isolated-editor"), api = frame.contentWindow.__markdownEditor;
       return api.element.ownerDocument === frame.contentDocument && api.content.ownerDocument === frame.contentDocument;
     }), true, "Use the normal frame-owned API, not a facade");
     const sample = await get();
+    assert.equal(sample, await page.frameLocator('#isolated-editor').locator('body').evaluate(() => markdownSamples.compact), 'iframe starts with the compact showcase document');
     assert.equal(await page.locator("#frame-output").textContent(), sample);
     const view = page.frameLocator("#isolated-editor");
+    assert.equal(await view.getByRole('button', { name: 'Side-by-side', exact: true }).getAttribute('aria-pressed'), 'true');
+    await view.locator('.lightmarkdown-preview h1').waitFor();
     await view.locator('body').evaluate(() => {
       const before = document.createElement('button'); before.id = 'frame-entry-before'; before.textContent = 'Before editor';
       __markdownEditor.element.before(before);
@@ -694,7 +705,7 @@ async function main() {
     for (const [name, engine] of Object.entries(engines)) {
       const browser = await engine.launch();
       try {
-        for (const check of [checks, headingChecks, formattingChecks, codeChecks, codeBackgroundChecks, painterChecks, toolbarGroupChecks, substantialChecks, writingChecks, indentationChecks, ruleChecks, shortcutChecks, stateChecks, imageChecks, tableChecks, tableRowChecks, tableColumnChecks, tableAlignmentChecks, tableFormatChecks, tablePickerChecks, statusChecks, guideChecks, previewChecks, meltdownChecks, polishChecks, fullscreenChecks, splitChecks, reviewChecks, demoChecks, iframeExampleChecks]) {
+        for (const check of (process.argv.includes("--source-highlight") ? [sourceHighlightChecks, painterChecks, codeBackgroundChecks, polishChecks, demoChecks, iframeExampleChecks] : process.argv.includes("--task-click") ? [taskClickChecks, writingChecks, previewChecks, demoChecks, iframeExampleChecks] : [checks, headingChecks, formattingChecks, codeChecks, codeBackgroundChecks, painterChecks, sourceHighlightChecks, taskClickChecks, toolbarGroupChecks, substantialChecks, writingChecks, indentationChecks, ruleChecks, shortcutChecks, stateChecks, imageChecks, tableChecks, tableRowChecks, tableColumnChecks, tableAlignmentChecks, tableFormatChecks, tablePickerChecks, statusChecks, guideChecks, previewChecks, previewImageChecks, meltdownChecks, polishChecks, fullscreenChecks, splitChecks, reviewChecks, demoChecks, iframeExampleChecks])) {
           const checkStarted = performance.now();
           try { await check(browser, base, name, options); }
           catch (error) { console.error(`${name}/${check.name}: ${error.message}`); failures.push(error); }

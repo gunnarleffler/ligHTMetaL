@@ -55,6 +55,8 @@ it does not change the production core's `contenteditable="true"` contract.
 The native-frame diagnostic contains no editor and can fail independently of
 supported editor workflows. It is not part of `npm test`.
 
-Real IME/mobile input, screen readers, Safari, controlled performance budgets,
-cache high-water memory, and teardown measurements remain open. Synthetic events
-and isolated timing samples do not establish those claims.
+Real IME/mobile input and screen-reader behavior remain unverified. The
+[performance review](performance-review.md) records accepted latency and retained-DOM
+limits, not controlled budgets or heap/collection guarantees. Native Safari testing
+is outside the [required suite scope](releasing.md#approved-validation-scope).
+Synthetic events and timing samples do not establish those claims.

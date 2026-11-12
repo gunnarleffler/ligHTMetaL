@@ -383,9 +383,9 @@ module.exports = async function tableControlChecks(page, check) {
     await select(0, 0);
     const before = await html();
     await bar.getByRole('button', { name: label, exact: true }).click();
-    check('table edits enforce dimension and cell-count limits without changing content',
+    check('table edits enforce dimension and cell-count limits without content changes or toolbar notices',
       await html() === before && (await state()).changes === 0 &&
-      (await host.getByRole('status').textContent()).includes('10,000 cells'));
+      (await host.locator('.lightmetal-error').count()) === 0);
   }
 
   await load('<p>Before</p><table><tr><td>First</td></tr></table>' +

@@ -1,14 +1,15 @@
-# ligHTMetaL::MaiDEn — the lightMarkDown Editor: next-step specification
+# ligHTMetaL::MaiDEn — the lightMarkDown Editor specification
 
 ## 1. Purpose and status
 
-Turn the Markdown developer preview into a dependable, full-featured source
-editor. Keep Markdown visible, use a monospace writing font, and keep the
-interface and setup familiar to ligHTMetaL users.
+MaiDEn keeps Markdown visible, uses a monospace writing font, and shares the
+HTML editor's interface conventions. This document defines implemented scope and
+proposed extensions, not a claim that every requirement is complete. See
+[Current work](#7-current-work) for outstanding scope and the
+[release policy](../releasing.md) for accepted validation limits.
 
-This is an implementation plan, not a claim that the features below exist.
-The starting point is commit `f62743d`. The companion remains unpublished;
-npm 0.4.0 contains only the HTML editor and skins.
+MaiDEn ships with lightmetal 0.7.0. See [the README](../../README.md) for
+installation and quickstarts.
 
 EasyMDE supplies a useful coverage baseline, not a feature ceiling or a codebase
 to copy. Built-in buttons need functional counterparts unless explicitly omitted.
@@ -233,12 +234,8 @@ unsupported syntax remains editable and intact. A style-only change never emits
 a content change. Keep the writing font monospaced unless another font model is
 separately proven.
 
-**Review checkpoint satisfied:** the earlier implementation review and cleanup,
-plus focused review of the new M2 syntax passes, are complete. The review covered
-mapping, painting, selection/history boundaries, lifecycle, tests, and cost risks.
-Do not repeat a holistic review as another gate before M3. Broader validation and
-formal budgets remain follow-up work. Propose future refactors for approval;
-completion does not authorize modules, a dependency, or a rewrite.
+Broader validation and formal budgets remain follow-up work under the release
+policy. New modules, dependencies or tokenizer rewrites need separate approval.
 
 ### M3 — Finish source commands and writing ergonomics
 
@@ -472,9 +469,9 @@ Fullscreen. With `preview: { render }` configured, the default toolbar adds
 Preview and Side-by-side before Fullscreen and Help. The application owns the
 renderer chain. It returns HTML synchronously or through a Promise; core imports
 no parser/highlighter. Explicit built-in Preview
-without a renderer fails initialization. Preview filters returned HTML, replaces
-images/task inputs with inert text, preserves safe highlighting classes, and
-ignores stale async results. Applications disable raw HTML in the renderer.
+without a renderer fails initialization. Preview filters returned HTML, loads
+validated image URLs, replaces rejected images/task inputs with text, preserves
+safe highlighting classes, and ignores stale async results. Applications disable raw HTML in the renderer.
 MeltDown is the dogfooded renderer; poliSH supplies code highlighting through
 its optional `highlight` hook. Neither library is imported by the editor core.
 No third-party parser or highlighter dependency is needed.
@@ -505,9 +502,15 @@ renderer integration/example that makes both preview controls usable.
 - Treat generated HTML as untrusted. Define an allowlist/sanitization boundary;
   a Markdown parser is not a sanitizer. Raw HTML is disabled by default in preview.
 - Block executable URLs, handlers, unsafe embeds, and unapproved resource loads.
-  Show image placeholders until a configured resource policy permits loading.
-  External images need explicit permission; opening preview alone must not trigger
-  remote content requests. Test this boundary separately from insertion checks.
+  Images load by default from HTTP(S), relative URLs resolving to HTTP(S), and
+  valid base64 PNG/JPEG/GIF/WebP data URLs, and blob URLs matching the editor
+  document's parsed non-opaque origin. Preserve src/alt/title, positive integer
+  width/height within HTML's unsigned-long range, loading=lazy|eager, and
+  decoding=async|sync|auto. Set no-referrer; reject other schemes, cross-origin or
+  opaque blob URLs, SVG data URLs, srcset, and styles. Rejected
+  images become placeholders. Remote requests remain possible; applications own
+  CSP/origin policy. Preview and split view use the same filter, independently of
+  renderer raw-HTML settings. Test this boundary separately from source insertion.
 - Preview-only mode preserves source and selection; formatting controls reflect
   whether editing is available. Returning to source restores focus and scroll.
 - Split view works without forcing fullscreen. Provide a usable narrow-screen
@@ -562,8 +565,8 @@ met. Publish the tested support matrix and any remaining limits.
   limits. Do not advertise full dialect compliance unless fixtures support it.
 - Keep the package's main entry point as the HTML editor. Ship the companion and
   any approved optional modules through stable, case-correct paths.
-- Choose a new version and align npm/Python metadata and lockfiles. Never replace
-  published 0.4.0. Commit, tag, push, and publication each need approval.
+- Choose a new version and align npm metadata and any local lockfile. Never
+  replace a published version. Commit, tag, push, and publication each need approval.
 - Build, test, inspect the package allowlist, and test the exact release archive.
   Confirm local assets, licenses, no install hooks, and no unexpected dependencies.
 - After publication, verify registry integrity, a clean script-free install, and
@@ -608,24 +611,22 @@ explicitly excluded; extensions remain welcome.
 
 ## 7. Current work
 
-M2, the pre-M3 review checkpoint, and the agreed M3 command/writing scope are
-implemented. `markdown-commands.md` documents headings, emphasis, code/template
-links, lists/tasks/quotes, writing keys, rules, separators, shortcuts/hints, and
-native command states. Clean Block is omitted, not unfinished work. M4 is complete
-for the agreed scope: image templates, inline-image URL selection, table-size
-picking, and row/column/alignment editing. Shared reference-image editing, image
-file workflows, and advanced table conversion remain future nice-to-haves, not
-M4 blockers. Keep reference images protected. M5 Help, Preview, Side-by-side, and
-Fullscreen are implemented, including the optional MeltDown/poliSH rendering chain.
-The supported-scope regression suite and package checks pass in Chromium/Firefox.
-Next: complete M5 accessibility review, then proceed with M6 integration,
-accessibility, and performance hardening.
-[The security report](../security-review.md#firefox-runtime-diagnosis) records the
-separate native cross-document runtime limitations. The
-report also records the completed rendering-boundary security checks and their
-limits. Agree performance budgets and any new API, toolbar-default, dependency,
-or configuration changes before implementation.
+M2 recognition and the agreed M3/M4 source-editing scope are implemented,
+including image templates, existing-URL selection, table picking and contextual
+table edits. See [command rules](../markdown-commands.md). Clean Block is excluded;
+reference images remain protected. Help and Fullscreen need no renderer. Preview
+and Side-by-side use an application renderer; the demos connect MeltDown/poliSH.
+Live source code colors and source task clicks are available in the checkout.
+Preview remains read-only. The next agreed feature work is the image-file workflow;
+reference-image editing and advanced table conversion remain deferred.
 
-Preserve the synchronous API, native editing/history, and application-owned iframe
-examples. Remaining M1 manual input/accessibility checks and broader performance
-validation stay open; they do not reopen M2 or block M3.
+Broader M5/M6 input, accessibility and performance goals remain open, subject to
+[the approved validation scope](../releasing.md#approved-validation-scope). The
+focused 0.6.0 usability/performance reviews do not establish WCAG, screen-reader,
+real-device, Safari or numeric performance guarantees. Do not reopen accepted
+release limits without a maintainer decision.
+
+Preserve the synchronous API, native history and application-owned iframe
+examples. [The security report](../security-review.md#firefox-runtime-diagnosis)
+records separate native cross-document limits. Agree performance budgets and new
+API, toolbar-default, dependency or configuration changes before implementation.

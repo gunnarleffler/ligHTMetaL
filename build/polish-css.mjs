@@ -13,7 +13,7 @@ const separators = [' ', '\\9 ', '\\a ', '\\c ', '\\d '];
 const themeClass = ['[class^="theme-"]', ...separators.map(space => `[class*="${space}theme-"]`)].join(', ');
 // An explicit palette (including app-defined theme-* classes) owns its subtree.
 const named = `:is(.code, .polish, .lightmarkdown-preview):is(${themeClass})`;
-const automatic = `:where(.code, .polish, .lightmarkdown-preview):not(:where(${named}, ${named} *))`;
+const automatic = `:where(.code, .polish, .lightmarkdown-preview, .lightmarkdown-paint):not(:where(${named}, ${named} *))`;
 const categories = ['plain', 'comment', 'keyword', 'string', 'number', 'boolean', 'constant', 'function', 'type', 'variable', 'property', 'operator', 'punctuation', 'tag', 'attribute'];
 const automaticCSS = [
   `${automatic} { color-scheme: var(--lightmetal-color-scheme, light dark); }`,

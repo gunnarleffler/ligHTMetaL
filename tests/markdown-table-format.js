@@ -1,5 +1,6 @@
 /* Table menu and explicit monospace source padding, with native history. */
 const assert = require('node:assert/strict');
+const { setMarkdownView } = require('./browser-checks');
 const compact = '| Name | Role |\n| --- | --- |\n| Alice | Developer |\n| Bob | Designer |';
 const padded = '| Name  | Role      |\n| ----- | --------- |\n| Alice | Developer |\n| Bob   | Designer  |';
 
@@ -158,13 +159,15 @@ async function tableFormatChecks(browser, base, name) {
     await page.evaluate(() => __markdownEditor.destroy()); assert.equal(await page.locator('.lightmarkdown-table-menu').count(), 0);
     monitor = false;
     await page.goto(base + '/examples/markdown-iframe.html'); await page.waitForFunction(() => !document.getElementById('read-markdown').disabled);
+    // Bring the whole frame into view, not just its toolbar above the menu.
+    await page.locator('#isolated-editor').scrollIntoViewIfNeeded();
     const view = page.frameLocator('#isolated-editor'), input = view.locator('.lightmarkdown-input');
     await input.evaluate((node, text) => {
       const win = node.ownerDocument.defaultView; win.__markdownEditor.setMarkdown(text);
       const range = node.ownerDocument.createRange(); range.setStart(node.children[2].firstChild, 2); range.setEnd(node.children[2].firstChild, 7);
       node.focus(); node.ownerDocument.getSelection().removeAllRanges(); node.ownerDocument.getSelection().addRange(range);
     }, compact);
-    await view.getByRole('button', { name: 'Side-by-side', exact: true }).click();
+    await setMarkdownView(view, 'split');
     await view.getByRole('button', { name: 'Table', exact: true }).click(); await view.getByRole('menuitem', { name: 'Format Table', exact: true }).click();
     assert.equal(await input.evaluate(node => node.ownerDocument.defaultView.__markdownEditor.getMarkdown()), padded);
     assert.equal(await input.evaluate(node => node.ownerDocument.getSelection().toString()), 'Alice');

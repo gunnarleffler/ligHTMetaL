@@ -159,6 +159,16 @@ html.lightmarkdown-page-fullscreen { overflow: hidden; }
   background: var(--lightmetal-selection-bg);
 }
 .lightmarkdown-stage:focus-within { outline: 2px solid var(--lightmetal-accent); outline-offset: -2px; }
+/* Source highlighting changes colors only, even when poliSH CSS loads last. */
+.lightmarkdown-paint .token {
+  font: inherit !important;
+  text-decoration: inherit !important;
+}
+/* Keep Markdown's own emphasis when code appears inside it. */
+.lightmarkdown-paint .token.lightmarkdown-bold { font-weight: 700 !important; }
+.lightmarkdown-paint .token.lightmarkdown-italic { font-style: italic !important; }
+.lightmarkdown-paint .token.lightmarkdown-strike { text-decoration: line-through !important; }
+.lightmarkdown-paint .token.lightmarkdown-link { text-decoration: underline !important; }
 .lightmarkdown-paint .lightmarkdown-bold { font-weight: 700; }
 .lightmarkdown-paint .lightmarkdown-italic { font-style: italic; }
 .lightmarkdown-paint .lightmarkdown-strike { text-decoration: line-through; }

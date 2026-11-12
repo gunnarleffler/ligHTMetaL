@@ -62,11 +62,12 @@ const render = markdown =&gt; meltDown.parse(markdown, {
 
 const editor = maiden.init({
   element: document.getElementById('editor'),
+  sourceHighlight: highlighter.highlightTokens,
   preview: { render }
 });
 editor.element.querySelector('.lightmarkdown-preview')
   .classList.add('polish', 'theme-dark');</code></pre>
-  <p>Load each library separately. MeltDown owns code-block wrappers; poliSH returns their highlighted contents. Themes change with CSS classes, without highlighting again. See the <a href="markdown.html">MaiDEn example</a> for the complete workflow.</p>
+  <p>Load each library separately. The sourceHighlight hook colors code while you edit. MeltDown owns preview code-block wrappers; poliSH returns their highlighted contents. Themes change with CSS classes, without highlighting again. See the <a href="markdown.html">MaiDEn example</a> for the complete workflow.</p>
   <h2>Focused tools, flexible output</h2>
   <p>Language aliases such as <code>js</code>, <code>py</code>, and <code>sh</code> work directly. Unlabelled code uses conservative guessing among registered languages; unknown explicit labels stay plain. Set <code>guessLanguage: false</code> to disable guessing.</p>
   <p>Use <code>ansi</code> to convert actual terminal escape sequences, or use the token and terminal-output APIs in Node.js. ANSI colors work in standalone output; MaiDEn keeps inline styles filtered. Use a maintained HTML sanitizer for untrusted documents, and keep grammars and scanner callbacks application-controlled.</p>

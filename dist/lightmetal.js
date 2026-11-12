@@ -25,51 +25,434 @@ var lightmetal = (() => {
     init: () => init
   });
 
-  // src/toolbar-groups.js
-  var groups = [
-    ["bold", "italic", "underline", "strikethrough"],
-    ["heading1", "heading2", "paragraph"],
-    ["quote", "ulist", "olist"],
-    ["code", "codeblock"],
-    ["line", "link", "image", "table"],
-    ["undo", "redo"],
-    ["preview", "side-by-side", "fullscreen", "source", "guide"]
-  ];
-  function groupToolbar(toolbar, entries) {
-    const sections = [];
-    for (const entry of entries) {
-      const group = groups.findIndex((names) => names.includes(entry.name));
-      let section = sections[sections.length - 1];
-      if (!section || section.group !== group) {
-        const divider = sections.length ? toolbar.ownerDocument.createElement("span") : null;
-        if (divider) {
-          divider.className = "lightmetal-toolbar-separator";
-          divider.setAttribute("role", "separator");
-          divider.setAttribute("aria-orientation", "vertical");
-          toolbar.insertBefore(divider, entry.button);
-        }
-        section = { group, divider, buttons: [] };
-        sections.push(section);
-      }
-      section.buttons.push(entry.button);
-    }
-    const refresh = () => {
-      let previous = false;
-      for (const section of sections) {
-        const visible = section.buttons.some((button) => {
-          const style = toolbar.ownerDocument.defaultView.getComputedStyle(button);
-          return !button.hidden && style.display !== "none" && style.visibility !== "hidden";
-        });
-        if (section.divider) section.divider.hidden = !visible || !previous;
-        if (visible) previous = true;
-      }
-    };
-    refresh();
-    const observer = new MutationObserver((records) => {
-      if (records.some((record) => record.target.tagName === "BUTTON" || record.target === toolbar && (record.attributeName === "class" || record.attributeName === "style"))) refresh();
+  // src/html-toolbar-overflow.js
+  var nextPopup = 0;
+  function createToolbarOverflow({ element, toolbar, entries, listen, closeMenus, defaultToolbar }) {
+    const doc = element.ownerDocument, win = doc.defaultView;
+    const trigger = doc.createElement("button");
+    trigger.type = "button";
+    trigger.className = "lightmetal-button lightmetal-overflow-trigger";
+    trigger.textContent = "\u22EF";
+    trigger.title = defaultToolbar ? "More" : "Overflow";
+    trigger.setAttribute("aria-label", trigger.title);
+    trigger.setAttribute("aria-haspopup", "dialog");
+    trigger.setAttribute("aria-expanded", "false");
+    trigger.tabIndex = -1;
+    const popup = doc.createElement("div");
+    popup.className = "lightmetal-toolbar-popup lightmetal-overflow";
+    popup.setAttribute("role", "dialog");
+    popup.setAttribute("aria-label", trigger.title);
+    popup.id = `lightmetal-overflow-${++nextPopup}`;
+    trigger.setAttribute("aria-controls", popup.id);
+    popup.hidden = true;
+    if (typeof popup.showPopover === "function") popup.setAttribute("popover", "manual");
+    const slots = entries.map(({ button }) => {
+      const slot = doc.createComment("toolbar action");
+      toolbar.insertBefore(slot, button);
+      return slot;
     });
-    observer.observe(toolbar, { subtree: true, attributes: true, attributeFilter: ["hidden", "style", "class", "disabled"] });
-    return () => observer.disconnect();
+    const historyIndex = defaultToolbar ? entries.findIndex((entry) => entry.name === "undo") : -1;
+    if (historyIndex >= 0) toolbar.insertBefore(trigger, slots[historyIndex]);
+    else toolbar.append(trigger);
+    element.append(popup);
+    function close(focus = false) {
+      if (popup.hasAttribute("popover") && popup.matches(":popover-open")) popup.hidePopover();
+      popup.hidden = true;
+      trigger.setAttribute("aria-expanded", "false");
+      if (focus) trigger.focus();
+    }
+    function position() {
+      if (popup.hidden) return;
+      popup.style.maxHeight = `${Math.max(0, win.innerHeight - 16)}px`;
+      popup.style.maxWidth = `${Math.max(0, win.innerWidth - 16)}px`;
+      const anchor = trigger.getBoundingClientRect(), box = popup.getBoundingClientRect();
+      popup.style.left = `${Math.max(8, Math.min(anchor.left, win.innerWidth - box.width - 8))}px`;
+      popup.style.top = `${Math.max(8, Math.min(anchor.bottom + 4, win.innerHeight - box.height - 8))}px`;
+    }
+    let lastWidth = -1;
+    function layout() {
+      const width = toolbar.clientWidth;
+      if (!width || width === lastWidth) return;
+      lastWidth = width;
+      close();
+      entries.forEach(({ button }, i) => slots[i].after(button));
+      trigger.hidden = true;
+      const style = win.getComputedStyle(toolbar), gap = parseFloat(style.columnGap) || 0;
+      const available = width - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight);
+      const widths = entries.map(({ button }) => button.getBoundingClientRect().width + (parseFloat(win.getComputedStyle(button).marginLeft) || 0));
+      const secondary = entries.filter((entry) => entry.secondary);
+      let total = widths.reduce((sum, width2, i) => sum + (entries[i].secondary ? 0 : width2), 0) + gap * Math.max(0, entries.length - secondary.length - 1);
+      if (total <= available && !secondary.length) return;
+      trigger.hidden = false;
+      trigger.style.flexShrink = "0";
+      total += trigger.getBoundingClientRect().width + gap;
+      trigger.style.removeProperty("flex-shrink");
+      const priority = ["blocks", "bold", "table", "image", "source", "fullscreen"];
+      const candidates = entries.map((entry, i) => ({ ...entry, i })).sort((a, b) => {
+        const pa = priority.indexOf(a.name), pb = priority.indexOf(b.name);
+        return (pa < 0 ? -1 : priority.length - pa) - (pb < 0 ? -1 : priority.length - pb) || b.i - a.i;
+      });
+      const moved = new Set(secondary.map((entry) => entry.button));
+      for (const { button, i } of candidates) {
+        if (total <= available) break;
+        if (moved.has(button)) continue;
+        total -= widths[i] + gap;
+        moved.add(button);
+      }
+      for (const { button } of entries) if (moved.has(button)) popup.append(button);
+    }
+    listen(trigger, "mousedown", (event) => event.preventDefault());
+    function open() {
+      if (!popup.hidden) {
+        close(true);
+        return;
+      }
+      closeMenus();
+      popup.hidden = false;
+      if (popup.hasAttribute("popover")) popup.showPopover();
+      trigger.setAttribute("aria-expanded", "true");
+      position();
+      popup.querySelector("button:not(:disabled)")?.focus();
+    }
+    listen(trigger, "click", open);
+    listen(trigger, "keydown", (event) => {
+      if (event.key === "ArrowDown") {
+        event.preventDefault();
+        open();
+      }
+    });
+    listen(popup, "keydown", (event) => {
+      if (event.defaultPrevented || event.isComposing || event.ctrlKey || event.metaKey || event.altKey) return;
+      if (event.key === "Escape") {
+        event.preventDefault();
+        event.stopPropagation();
+        close(true);
+      }
+      if (event.key === "Tab") close();
+      if (["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) {
+        event.preventDefault();
+        const choices = [...popup.querySelectorAll("button:not(:disabled)")], i = choices.indexOf(doc.activeElement);
+        choices[event.key === "Home" ? 0 : event.key === "End" ? choices.length - 1 : (i + (event.key === "ArrowUp" ? -1 : 1) + choices.length) % choices.length]?.focus();
+      }
+    });
+    listen(popup, "click", (event) => {
+      if (event.target.closest("button")) close();
+    });
+    listen(doc, "pointerdown", (event) => {
+      if (!popup.contains(event.target) && !trigger.contains(event.target)) close();
+    });
+    listen(element, "focusin", () => {
+      trigger.tabIndex = 0;
+    });
+    listen(element, "focusout", (event) => {
+      if (!element.contains(event.relatedTarget)) {
+        trigger.tabIndex = -1;
+        close();
+      }
+    });
+    listen(win, "resize", position);
+    listen(win, "scroll", position, true);
+    const observer = new win.ResizeObserver(layout);
+    observer.observe(toolbar);
+    layout();
+    return { close, trigger, popup, destroy() {
+      observer.disconnect();
+      close();
+      popup.remove();
+      trigger.remove();
+      slots.forEach((slot) => slot.remove());
+    } };
+  }
+
+  // src/html-formatting.js
+  var icon = (path) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="${path}"/></svg>`;
+  var alignmentIcons = {
+    justifyLeft: "M4 5h16M4 10h10M4 15h16M4 20h10",
+    justifyCenter: "M4 5h16M7 10h10M4 15h16M7 20h10",
+    justifyRight: "M4 5h16M10 10h10M4 15h16M10 20h10",
+    justifyFull: "M4 5h16M4 10h16M4 15h16M4 20h16"
+  };
+  var groups = {
+    headings: ["Headings", "H1\u2304", [1, 2, 3, 4, 5, 6].map((n) => [`Heading ${n}`, "formatBlock", `<h${n}>`])],
+    blocks: ["Paragraph style", "\xB6\u2304", [["Paragraph", "formatBlock", "<p>"], ...[1, 2, 3, 4, 5, 6].map((n) => [`Heading ${n}`, "formatBlock", `<h${n}>`]), ["Blockquote", "formatBlock", "<blockquote>"]]],
+    lists: ["Lists", "\u2637\u2304", [["Bulleted list", "insertUnorderedList"], ["Numbered list", "insertOrderedList"]]],
+    insert: ["Insert", "+\u2304", [["Horizontal rule", "insertHorizontalRule"], ...[["\u{1F600}", "Grinning face"], ["\u{1F60A}", "Smiling face"], ["\u{1F602}", "Laughing"], ["\u2764\uFE0F", "Heart"], ["\u{1F44D}", "Thumbs up"], ["\u{1F389}", "Celebration"], ["\u2705", "Check mark"], ["\u2B50", "Star"], ["\u{1F525}", "Fire"], ["\u{1F4A1}", "Idea"], ["\u{1F64F}", "Thanks"], ["\u{1F44B}", "Wave"]].map(([emoji, label]) => [`${emoji} ${label}`, "insertText", emoji])]],
+    more: ["More", "\u22EF", [["Remove formatting", "removeFormat"], ["Unlink", "unlink"], ["Indent", "indent"], ["Outdent", "outdent"], ["Code block", "formatBlock", "<pre>"]]],
+    text: ["Text options", "A", null],
+    script: ["Superscript / Subscript", "x\xB2\u2304", [["Superscript", "superscript"], ["Subscript", "subscript"]]],
+    alignment: ["Text alignment", "\u2261\u2304", [["Align left", "justifyLeft"], ["Align center", "justifyCenter"], ["Align right", "justifyRight"], ["Justify", "justifyFull"]]],
+    indentation: ["Indentation", "\u21E5\u2304", [["Indent", "indent"], ["Outdent", "outdent"]]],
+    formatting: ["Formatting", "T\u0338\u2304", [["Remove formatting", "removeFormat"], ["Unlink", "unlink"]]],
+    font: ["Font and colors", "A\u2304", null]
+  };
+  var formattingActions = Object.fromEntries(Object.entries(groups).map(
+    ([name, [title, icon2]]) => [name, { name, title, icon: icon2, result: () => false }]
+  ));
+  for (const [name, title, icon2] of [["undo", "Undo", "\u21B6"], ["redo", "Redo", "\u21B7"]]) {
+    formattingActions[name] = { name, title, icon: icon2, result: () => false };
+  }
+  for (const [name, path] of Object.entries({ blocks: "M16 4H10a5 5 0 0 0 0 10h2M12 4v16M16 4v16", lists: "M4 6h1M4 12h1M4 18h1M10 6h10M10 12h10M10 18h10", alignment: alignmentIcons.justifyLeft, insert: "M12 4v16M4 12h16", more: "M4 12h1M11 12h1M18 12h1" })) formattingActions[name].icon = icon(path);
+  var counter = 0;
+  function createFormattingControls({ element, content, listen, exec: exec2, canEdit, applySettings, onInteraction }) {
+    const doc = content.ownerDocument, win = doc.defaultView;
+    const bindings = [];
+    let popupCleanups = [];
+    const listenPopup = (target, type, handler) => {
+      target.addEventListener(type, handler);
+      popupCleanups.push(() => target.removeEventListener(type, handler));
+    };
+    const disposePopup = () => {
+      popupCleanups.forEach((cleanup) => cleanup());
+      popupCleanups = [];
+      popup?.remove();
+    };
+    let popup = null, trigger = null, saved = null, composing = false;
+    const observer = new win.MutationObserver(() => {
+      if (popup && !popup.hidden) close();
+    });
+    observer.observe(content, { subtree: true, childList: true, characterData: true, attributes: true });
+    const selectionRange = () => {
+      const selection = doc.getSelection();
+      const range = selection?.rangeCount ? selection.getRangeAt(0) : null;
+      return range && content.contains(range.commonAncestorContainer) ? range : null;
+    };
+    const anchorButton = () => trigger?.closest(".lightmetal-overflow") ? element.querySelector(".lightmetal-overflow-trigger") : trigger;
+    function close(focus = false) {
+      if (popup) {
+        if (popup.hasAttribute("popover") && popup.matches(":popover-open")) popup.hidePopover();
+        popup.hidden = true;
+      }
+      trigger?.setAttribute("aria-expanded", "false");
+      saved = null;
+      if (focus && trigger?.isConnected) anchorButton()?.focus();
+    }
+    function position() {
+      if (!popup || popup.hidden) return;
+      popup.style.maxWidth = `${Math.max(0, win.innerWidth - 16)}px`;
+      popup.style.maxHeight = `${Math.max(0, win.innerHeight - 16)}px`;
+      const anchor = anchorButton().getBoundingClientRect(), box = popup.getBoundingClientRect();
+      popup.style.left = `${Math.max(8, Math.min(anchor.left, win.innerWidth - box.width - 8))}px`;
+      popup.style.top = `${Math.max(8, Math.min(anchor.bottom + 4, win.innerHeight - box.height - 8))}px`;
+    }
+    function run(command, value, range = saved) {
+      if (!canEdit() || composing || observer.takeRecords().length || !range || !content.contains(range.commonAncestorContainer)) {
+        close();
+        return false;
+      }
+      const restored = range.cloneRange();
+      close();
+      content.focus();
+      const selection = doc.getSelection();
+      selection.removeAllRanges();
+      selection.addRange(restored);
+      applySettings();
+      const accepted = exec2(command, value);
+      refresh();
+      return accepted;
+    }
+    function menuButton(label, command, value) {
+      const button = doc.createElement("button");
+      button.type = "button";
+      button.textContent = label;
+      button.setAttribute("role", "menuitem");
+      button.tabIndex = -1;
+      if (alignmentIcons[command]) {
+        const image = doc.createElement("span");
+        image.innerHTML = icon(alignmentIcons[command]);
+        image.setAttribute("aria-hidden", "true");
+        button.prepend(image);
+      }
+      if (command === "formatBlock") {
+        const level = /^<h([1-6])>$/.exec(value);
+        if (level) {
+          button.style.fontSize = `${21 - Number(level[1])}px`;
+          button.style.fontWeight = "600";
+        }
+      }
+      if (command === "formatBlock" || command.startsWith("justify") || ["superscript", "subscript", "insertUnorderedList", "insertOrderedList"].includes(command)) {
+        button.setAttribute("role", command === "superscript" || command === "subscript" ? "menuitemcheckbox" : "menuitemradio");
+        const active = command === "formatBlock" ? String(doc.queryCommandValue(command)).toLowerCase().replace(/[<>]/g, "") === value.slice(1, -1) : doc.queryCommandState(command);
+        button.setAttribute("aria-checked", String(!!selectionRange() && !!active));
+      }
+      button.disabled = !doc.queryCommandSupported(command) || !!selectionRange() && !doc.queryCommandEnabled(command);
+      listenPopup(button, "mousedown", (event) => event.preventDefault());
+      listenPopup(button, "click", () => run(command, value));
+      popup.append(button);
+      if (popup.getAttribute("role") === "dialog") {
+        const checked = button.getAttribute("aria-checked");
+        button.removeAttribute("role");
+        button.removeAttribute("aria-checked");
+        button.tabIndex = 0;
+        if (checked !== null) button.setAttribute("aria-pressed", checked);
+      }
+      return button;
+    }
+    function fontFields() {
+      const addSelect = (label, command, values) => {
+        const wrapper = doc.createElement("label");
+        wrapper.textContent = label;
+        const select = doc.createElement("select");
+        select.setAttribute("aria-label", label);
+        for (const [text, value] of [["Choose\u2026", ""], ...values]) {
+          const option = doc.createElement("option");
+          option.textContent = text;
+          option.value = value;
+          select.append(option);
+        }
+        select.disabled = !doc.queryCommandSupported(command);
+        listenPopup(select, "change", () => {
+          if (select.value) run(command, select.value);
+        });
+        wrapper.append(select);
+        popup.append(wrapper);
+      };
+      addSelect("Font family", "fontName", ["Arial", "Verdana", "Georgia", "Times New Roman", "Courier New", "sans-serif", "serif", "monospace"].map((font) => [font, font]));
+      addSelect("Font size", "fontSize", ["Smallest", "Smaller", "Small", "Medium", "Large", "Larger", "Largest"].map((label, i) => [label, String(i + 1)]));
+      for (const [label, command, color] of [["Text color", "foreColor", "#24292f"], ["Highlight color", "hiliteColor", "#ffff00"]]) {
+        const wrapper = doc.createElement("div");
+        wrapper.className = "lightmetal-color-field";
+        const input = doc.createElement("input");
+        input.type = "color";
+        input.value = color;
+        input.setAttribute("aria-label", label);
+        const button = doc.createElement("button");
+        button.type = "button";
+        button.textContent = `Apply ${label.toLowerCase()}`;
+        button.disabled = input.disabled = !doc.queryCommandSupported(command);
+        listenPopup(button, "click", () => run(command, input.value));
+        wrapper.append(input, button);
+        popup.append(wrapper);
+      }
+    }
+    function open(name, button, last = false) {
+      if (!canEdit() || composing) return;
+      if (popup && !popup.hidden && trigger === button) {
+        close(true);
+        return;
+      }
+      let range = selectionRange();
+      close();
+      observer.takeRecords();
+      if (!range) {
+        range = doc.createRange();
+        range.selectNodeContents(content);
+        range.collapse(false);
+      }
+      onInteraction();
+      saved = range.cloneRange();
+      trigger = button;
+      disposePopup();
+      popup = doc.createElement("div");
+      popup.className = "lightmetal-table-dropdown lightmetal-table-menu lightmetal-format-popup";
+      popup.id = `lightmetal-format-${++counter}`;
+      const fields = name === "font" || name === "text";
+      popup.setAttribute("role", fields ? "dialog" : "menu");
+      popup.setAttribute("aria-label", groups[name][0]);
+      popup.tabIndex = -1;
+      if (typeof popup.showPopover === "function") popup.setAttribute("popover", "manual");
+      if (fields) {
+        fontFields();
+        if (name === "text") for (const [label, command] of groups.script[2]) menuButton(label, command);
+      } else if (name === "insert") {
+        menuButton("Horizontal rule", "insertHorizontalRule");
+        const label = doc.createElement("div");
+        label.className = "lightmetal-menu-label";
+        label.textContent = "Emoji";
+        popup.append(label);
+        const grid = doc.createElement("div");
+        grid.className = "lightmetal-emoji-grid";
+        for (const [label2, command, value] of groups.insert[2].slice(1)) {
+          const choice = menuButton(label2, command, value);
+          choice.textContent = value;
+          choice.setAttribute("aria-label", label2);
+          choice.title = label2;
+          grid.append(choice);
+        }
+        popup.append(grid);
+      } else for (const [label, command, value] of groups[name][2]) menuButton(label, command, value);
+      listenPopup(popup, "keydown", (event) => {
+        if (event.isComposing || event.ctrlKey || event.metaKey || event.altKey) return;
+        if (event.key === "Escape") {
+          event.preventDefault();
+          event.stopPropagation();
+          close(true);
+        }
+        if (event.key === "Tab" && !fields) close();
+        if (!fields && ["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) {
+          event.preventDefault();
+          const choices2 = [...popup.querySelectorAll("button:not(:disabled)")], index = choices2.indexOf(doc.activeElement);
+          choices2[event.key === "Home" ? 0 : event.key === "End" ? choices2.length - 1 : (index + (event.key === "ArrowUp" ? -1 : 1) + choices2.length) % choices2.length]?.focus();
+        }
+      });
+      element.append(popup);
+      popup.hidden = false;
+      if (popup.hasAttribute("popover")) popup.showPopover();
+      button.setAttribute("aria-controls", popup.id);
+      button.setAttribute("aria-expanded", "true");
+      position();
+      const choices = [...popup.querySelectorAll("button:not(:disabled),select:not(:disabled),input:not(:disabled)")];
+      (choices[last ? choices.length - 1 : 0] || popup).focus();
+    }
+    function refresh() {
+      for (const { name, button } of bindings) {
+        const disabled = !canEdit() || composing || ["undo", "redo"].includes(name) && !doc.queryCommandEnabled(name);
+        if (button.disabled !== disabled) button.disabled = disabled;
+      }
+    }
+    function bind(name, button) {
+      bindings.push({ name, button });
+      if (groups[name]) {
+        button.setAttribute("aria-haspopup", name === "font" || name === "text" ? "dialog" : "menu");
+        button.setAttribute("aria-expanded", "false");
+        listen(button, "mousedown", (event) => {
+          event.preventDefault();
+        });
+        listen(button, "click", () => open(name, button));
+        listen(button, "keydown", (event) => {
+          if (["ArrowDown", "ArrowUp"].includes(event.key) && !event.altKey && !event.ctrlKey && !event.metaKey) {
+            event.preventDefault();
+            open(name, button, event.key === "ArrowUp");
+          }
+        });
+      } else {
+        listen(button, "mousedown", (event) => event.preventDefault());
+        listen(button, "click", () => {
+          if (!canEdit() || composing) return;
+          onInteraction();
+          content.focus();
+          applySettings();
+          exec2(name);
+          refresh();
+        });
+      }
+      refresh();
+    }
+    listen(content, "compositionstart", () => {
+      composing = true;
+      close();
+      refresh();
+    });
+    listen(content, "compositionend", () => {
+      composing = false;
+      refresh();
+    });
+    for (const type of ["input", "keyup", "mouseup", "focus"]) listen(content, type, refresh);
+    listen(doc, "selectionchange", () => {
+      refresh();
+    });
+    listen(doc, "pointerdown", (event) => {
+      if (popup && !popup.hidden && !popup.contains(event.target) && !trigger?.contains(event.target)) close();
+    });
+    listen(doc, "focusin", (event) => {
+      if (popup && !popup.hidden && !popup.contains(event.target) && !trigger?.contains(event.target)) close();
+    });
+    listen(win, "resize", position);
+    listen(win, "scroll", position, true);
+    return { bind, close, refresh, destroy() {
+      close();
+      observer.disconnect();
+      disposePopup();
+    } };
   }
 
   // src/lightmetal.js
@@ -185,6 +568,7 @@ var lightmetal = (() => {
       result: () => true
     }
   };
+  Object.assign(defaultActions, formattingActions);
   var defaultClasses = {
     actionbar: "lightmetal-actionbar",
     button: "lightmetal-button",
@@ -212,7 +596,6 @@ var lightmetal = (() => {
     maxCells: TABLE_LIMITS.cells
   };
   var tableDropdownCounter = 0;
-  var TABLE_SIZE_ERROR = "Use 1\u20131,000 rows and 1\u2013100 columns, up to 10,000 cells.";
   var tableSizeAllowed = (rows, columns) => rows >= 1 && columns >= 1 && rows <= TABLE_LIMITS.rows && columns <= TABLE_LIMITS.columns && rows * columns <= TABLE_LIMITS.cells;
   var IMAGE_TYPES = ["image/jpeg", "image/png", "image/gif", "image/webp"];
   var IMAGE_EXT_TYPES = {
@@ -222,14 +605,27 @@ var lightmetal = (() => {
     gif: "image/gif",
     webp: "image/webp"
   };
-  var resolveActions = (requested, sourceAction) => {
+  var resolveActions = (requested, sourceAction, fullscreenAction) => {
     if (!requested) {
-      return [...Object.values(defaultActions), sourceAction].filter(Boolean);
+      return [
+        "insert",
+        "blocks",
+        "bold",
+        "italic",
+        "underline",
+        "strikethrough",
+        "text",
+        "alignment",
+        "lists",
+        "table",
+        "link",
+        "image"
+      ].map((name) => defaultActions[name]).concat(defaultActions.code, fullscreenAction, sourceAction, defaultActions.formatting, defaultActions.indentation, defaultActions.undo, defaultActions.redo).filter(Boolean);
     }
     if (!Array.isArray(requested)) throw new TypeError("actions must be an array.");
     return requested.map((action) => {
       if (typeof action === "string") {
-        const definition = action === "source" ? sourceAction : defaultActions[action];
+        const definition = action === "source" ? sourceAction : action === "fullscreen" ? fullscreenAction : defaultActions[action];
         if (!definition) throw new TypeError(`Unknown toolbar action: ${action}`);
         return definition;
       }
@@ -237,6 +633,7 @@ var lightmetal = (() => {
       if (action.name === "source" && sourceAction) {
         return { ...sourceAction, ...action };
       }
+      if (action.name === "fullscreen") return { ...fullscreenAction, ...action };
       if (defaultActions[action.name]) {
         return { ...defaultActions[action.name], ...action };
       }
@@ -396,11 +793,8 @@ var lightmetal = (() => {
     clean(root);
     return root.innerHTML;
   };
-  var buildImgTag = (url, alt) => {
-    const esc = (value) => String(value).replace(/&/g, "&amp;").replace(/"/g, "&quot;");
-    return `<img src="${esc(url)}" alt="${esc(alt)}">`;
-  };
   var imageCounter = 0;
+  var fullscreenOwners = /* @__PURE__ */ new WeakMap();
   var init = (settings) => {
     const element = settings.element;
     const classes = { ...defaultClasses, ...settings.classes };
@@ -417,9 +811,35 @@ var lightmetal = (() => {
     const baseURI = element.ownerDocument.baseURI;
     let mode = "wysiwyg";
     let destroyed = false;
-    let errorTimer = 0;
+    let fullscreen = null, composing = false;
+    const fullscreenButtons = [];
     let formatTimer = 0;
-    let pickerInput = null;
+    let insertionUI = null;
+    const insertionObserver = new MutationObserver(() => closeInsertion());
+    const insertionCleanups = [];
+    const listenInsertion = (target, type, handler) => {
+      target.addEventListener(type, handler);
+      insertionCleanups.push(() => target.removeEventListener(type, handler));
+    };
+    function closeInsertion(restoreFocus = false) {
+      const state = insertionUI;
+      insertionUI = null;
+      const changed = insertionObserver.takeRecords().length;
+      insertionObserver.disconnect();
+      insertionCleanups.splice(0).forEach((cleanup) => cleanup());
+      if (!state) return;
+      if (state.popup.hasAttribute("popover") && state.popup.matches(":popover-open")) state.popup.hidePopover();
+      state.popup.remove();
+      state.trigger.setAttribute("aria-expanded", "false");
+      if (restoreFocus) {
+        if (!changed && !destroyed && mode !== "source" && content.contains(state.range.commonAncestorContainer)) {
+          const selection = document.getSelection();
+          selection.removeAllRanges();
+          selection.addRange(state.range.cloneRange());
+        }
+        (state.trigger.closest(".lightmetal-overflow") ? overflow.trigger : state.trigger).focus();
+      }
+    }
     let tableDropdown = null;
     let tableMenu = null, tableInsertItem = null;
     const tableMenuButtons = /* @__PURE__ */ new Map();
@@ -428,12 +848,19 @@ var lightmetal = (() => {
     let tableMessage = null;
     let resetTableDropdown = null;
     const sourceAction = {
-      icon: SVG_MARKUP.source,
+      icon: SVG_MARKUP.code,
       title: "Source",
       state: () => mode === "source",
       result: () => mode === "source" ? exitSource() : enterSource()
     };
-    const resolvedActions = resolveActions(settings.actions, sourceAction);
+    const fullscreenAction = {
+      name: "fullscreen",
+      title: "Fullscreen",
+      icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H3v5m13-5h5v5M3 16v5h5m13-5v5h-5"/></svg>',
+      state: () => !!fullscreen,
+      result: toggleFullscreen
+    };
+    const resolvedActions = resolveActions(settings.actions, sourceAction, fullscreenAction);
     resolvedActions.forEach((action, index) => {
       const workflow = action && (action.name === "image" || action.name === "table") && !action.result;
       if (!action || typeof action.result !== "function" && !workflow) {
@@ -443,6 +870,7 @@ var lightmetal = (() => {
         throw new TypeError(`Toolbar action ${index + 1} must have a state function.`);
       }
     });
+    const ownsHTMLClass = !element.classList.contains("lightmetal-html");
     const cleanups = [];
     const listen = (target, type, handler, options = false) => {
       target.addEventListener(type, handler, options);
@@ -460,45 +888,142 @@ var lightmetal = (() => {
     const content = document.createElement("div");
     content.contentEditable = "true";
     content.className = classes.content;
+    content.classList.add("lightmetal-fullscreen-surface");
     content.setAttribute("role", "textbox");
     content.setAttribute("aria-label", "HTML content");
     content.setAttribute("aria-multiline", "true");
     const source = document.createElement("textarea");
     source.className = classes.source;
+    source.classList.add("lightmetal-fullscreen-surface");
     source.setAttribute("aria-label", "HTML source");
     source.spellcheck = false;
     source.hidden = true;
-    const showError = (message) => {
-      if (destroyed) return;
-      actionbar.querySelectorAll(`.${classes.error}`).forEach((n) => n.remove());
-      const node = document.createElement("div");
-      node.className = classes.error;
-      node.setAttribute("role", "status");
-      node.textContent = message;
-      actionbar.appendChild(node);
-      clearTimeout(errorTimer);
-      errorTimer = setTimeout(() => node.remove(), 6e3);
-    };
     const enterSource = () => {
+      closeInsertion();
       clearTimeout(formatTimer);
       closeTableMenu();
       closeTableDropdown();
+      formatting.close();
       mode = "source";
+      for (const { button, name } of toolbarButtons) if (!["source", "fullscreen"].includes(name)) button.disabled = true;
+      formatting.refresh();
       source.value = content.innerHTML;
       content.hidden = true;
       source.hidden = false;
       source.focus();
       updateTableControls();
+      updateFullscreenLayout();
     };
     const exitSource = () => {
       content.innerHTML = source.value;
       source.hidden = true;
       content.hidden = false;
       mode = "wysiwyg";
+      for (const { button } of toolbarButtons) button.disabled = false;
+      formatting.refresh();
       updateTableControls();
+      updateFullscreenLayout();
       if (settings.onChange) settings.onChange(content.innerHTML);
       return true;
     };
+    const fullscreenProperties = ["--lightmetal-fullscreen-writing-height", "--lightmetal-fullscreen-x", "--lightmetal-fullscreen-y"];
+    function setFullscreenProperty(name, value) {
+      if (element.style.getPropertyValue(name) !== value) element.style.setProperty(name, value);
+      fullscreen.values[name] = value;
+    }
+    const fullscreenResize = typeof ResizeObserver === "function" ? new ResizeObserver(() => updateFullscreenLayout()) : null;
+    function updateFullscreenLayout() {
+      if (!fullscreen) return;
+      const field = mode === "source" ? source : content;
+      const style = window.getComputedStyle(element);
+      const rect = element.getBoundingClientRect();
+      const height = Math.max(0, rect.bottom - parseFloat(style.borderBottomWidth || 0) - parseFloat(style.paddingBottom || 0) - field.getBoundingClientRect().top);
+      fullscreen.translateX -= rect.left;
+      fullscreen.translateY -= rect.top;
+      setFullscreenProperty(fullscreenProperties[0], `${height}px`);
+      setFullscreenProperty(fullscreenProperties[1], `${fullscreen.translateX}px`);
+      setFullscreenProperty(fullscreenProperties[2], `${fullscreen.translateY}px`);
+    }
+    function updateFullscreenButtons() {
+      for (const button of fullscreenButtons) {
+        button.classList.toggle(classes.selected, !!fullscreen);
+        button.setAttribute("aria-pressed", String(!!fullscreen));
+      }
+    }
+    function writingSelection() {
+      if (mode === "source") return { start: source.selectionStart, end: source.selectionEnd, direction: source.selectionDirection };
+      const selection = document.getSelection();
+      if (!selection?.rangeCount || !content.contains(selection.anchorNode) || !content.contains(selection.focusNode)) return null;
+      return { anchor: selection.anchorNode, anchorOffset: selection.anchorOffset, focus: selection.focusNode, focusOffset: selection.focusOffset };
+    }
+    function focusWriting(selection) {
+      const sourceMode = mode === "source", field = sourceMode ? source : content;
+      if (document.activeElement !== field) field.focus({ preventScroll: true });
+      if (destroyed || sourceMode !== (mode === "source")) return;
+      if (sourceMode && selection) source.setSelectionRange(selection.start, selection.end, selection.direction);
+      else if (selection && content.contains(selection.anchor) && content.contains(selection.focus)) {
+        document.getSelection().setBaseAndExtent(selection.anchor, selection.anchorOffset, selection.focus, selection.focusOffset);
+      }
+    }
+    function exitFullscreen(focus = true) {
+      if (!fullscreen) return false;
+      const state = fullscreen, selection = writingSelection();
+      if (!destroyed && focus) focusWriting(selection);
+      if (fullscreen !== state) return true;
+      fullscreen = null;
+      fullscreenResize?.disconnect();
+      for (const [node, name, owned] of state.classes) if (owned) node.classList.remove(name);
+      for (const [name, value, priority] of state.styles) {
+        if (element.style.getPropertyValue(name) !== state.values[name]) continue;
+        if (value) element.style.setProperty(name, value, priority);
+        else element.style.removeProperty(name);
+      }
+      if (!state.hadStyleAttribute && !element.style.length) element.removeAttribute("style");
+      if (fullscreenOwners.get(document) === exitFullscreen) fullscreenOwners.delete(document);
+      content.scrollTop = state.contentTop;
+      content.scrollLeft = state.contentLeft;
+      source.scrollTop = state.sourceTop;
+      source.scrollLeft = state.sourceLeft;
+      actionbar.scrollLeft = state.toolbarLeft;
+      window.scrollTo(state.x, state.y);
+      updateFullscreenButtons();
+      return true;
+    }
+    function toggleFullscreen() {
+      if (destroyed || composing || !element.isConnected) return false;
+      closeInsertion();
+      closeTableMenu();
+      closeTableDropdown();
+      formatting.close();
+      if (fullscreen) return exitFullscreen();
+      fullscreenOwners.get(document)?.(false);
+      const selection = writingSelection();
+      fullscreen = {
+        contentTop: content.scrollTop,
+        contentLeft: content.scrollLeft,
+        sourceTop: source.scrollTop,
+        sourceLeft: source.scrollLeft,
+        toolbarLeft: actionbar.scrollLeft,
+        x: window.scrollX,
+        y: window.scrollY,
+        hadStyleAttribute: element.hasAttribute("style"),
+        styles: fullscreenProperties.map((name) => [name, element.style.getPropertyValue(name), element.style.getPropertyPriority(name)]),
+        values: {},
+        translateX: 0,
+        translateY: 0,
+        classes: [[element, "lightmetal-fullscreen"], [document.documentElement, "lightmetal-page-fullscreen"]].map(([node, name]) => [node, name, !node.classList.contains(name)])
+      };
+      focusWriting(selection);
+      if (destroyed || !fullscreen) return false;
+      fullscreenOwners.set(document, exitFullscreen);
+      setFullscreenProperty(fullscreenProperties[1], "0px");
+      setFullscreenProperty(fullscreenProperties[2], "0px");
+      for (const [node, name] of fullscreen.classes) node.classList.add(name);
+      updateFullscreenLayout();
+      for (const node of [element, actionbar, tablebar]) fullscreenResize?.observe(node);
+      updateFullscreenButtons();
+      return true;
+    }
     const imageURLError = (url) => {
       if (/^data:[^,]*;base64,/i.test(String(url).trim()) && !images.allowBase64) {
         return "Base64 images are disabled";
@@ -508,15 +1033,7 @@ var lightmetal = (() => {
       }
       return null;
     };
-    const linkResult = () => {
-      const url = window.prompt("Enter the link URL");
-      if (!url) return false;
-      if (!unrestricted && !allowLinkURL(url, baseURI, true)) {
-        showError("Refusing to insert an unsafe link URL");
-        return false;
-      }
-      return exec("createLink", url.trim());
-    };
+    const linkResult = (button) => openInsertion("link", button);
     const ensureCaret = () => {
       const sel = document.getSelection();
       if (!sel || !sel.rangeCount || !content.contains(sel.getRangeAt(0).commonAncestorContainer)) {
@@ -530,7 +1047,6 @@ var lightmetal = (() => {
     };
     const tableError = (message) => {
       if (tableDropdown && !tableDropdown.hidden) tableMessage.textContent = message;
-      else showError(message);
       return false;
     };
     const captureTableRange = () => {
@@ -538,12 +1054,13 @@ var lightmetal = (() => {
       const range = selection?.rangeCount ? selection.getRangeAt(0) : null;
       tableRange = range && content.contains(range.commonAncestorContainer) ? range.cloneRange() : null;
     };
+    const tableAnchor = () => tableTrigger?.closest(".lightmetal-overflow") ? element.querySelector(".lightmetal-overflow-trigger") : tableTrigger;
     const closeTableMenu = (restoreFocus = false) => {
       if (!tableMenu || tableMenu.hidden) return;
       if (tableMenu.hasAttribute("popover") && tableMenu.matches(":popover-open")) tableMenu.hidePopover();
       tableMenu.hidden = true;
       tableTrigger?.setAttribute("aria-expanded", "false");
-      if (restoreFocus && !destroyed) tableTrigger?.focus();
+      if (restoreFocus && !destroyed) tableAnchor()?.focus();
     };
     const closeTableDropdown = (restoreFocus = false) => {
       if (tableDropdown && !tableDropdown.hidden) {
@@ -551,7 +1068,7 @@ var lightmetal = (() => {
         tableDropdown.hidden = true;
         tableInsertItem?.setAttribute("aria-expanded", "false");
         tableTrigger?.setAttribute("aria-expanded", "false");
-        if (restoreFocus) tableTrigger?.focus();
+        if (restoreFocus) tableAnchor()?.focus();
       }
       tableRange = null;
     };
@@ -605,7 +1122,7 @@ var lightmetal = (() => {
       if (!tableDropdown || tableDropdown.hidden) return;
       tableDropdown.style.maxWidth = `${Math.max(0, window.innerWidth - 16)}px`;
       tableDropdown.style.maxHeight = `${Math.max(0, window.innerHeight - 16)}px`;
-      const anchor = tableTrigger.getBoundingClientRect();
+      const anchor = tableAnchor().getBoundingClientRect();
       const popup = tableDropdown.getBoundingClientRect();
       const left = Math.max(8, Math.min(anchor.left, window.innerWidth - popup.width - 8));
       const below = anchor.bottom + 4;
@@ -723,20 +1240,20 @@ var lightmetal = (() => {
       } else {
         ensureCaret();
       }
-      const ok = exec("insertHTML", buildImgTag(url, alt || `image ${++imageCounter}`));
+      const image = document.createElement("img");
+      image.setAttribute("src", url);
+      image.setAttribute("alt", alt ?? `image ${++imageCounter}`);
+      const ok = exec("insertHTML", image.outerHTML);
       if (!ok) return false;
       content.focus();
       return true;
     };
-    const handleFile = async (file) => {
+    const handleFile = async (file, context = null) => {
       if (mode === "source" || destroyed) return false;
-      if (!images.enabled) {
-        showError("Images are disabled");
-        return false;
-      }
+      if (!images.enabled) return false;
       const selection = document.getSelection();
       const range = selection && selection.rangeCount ? selection.getRangeAt(0) : null;
-      const savedRange = range && content.contains(range.commonAncestorContainer) ? range.cloneRange() : null;
+      const savedRange = context?.range || (range && content.contains(range.commonAncestorContainer) ? range.cloneRange() : null);
       try {
         if (!file) throw new Error("No image received");
         let type = file.type;
@@ -771,58 +1288,319 @@ var lightmetal = (() => {
             "Image files are disabled. Allow base64 images or provide an onInsert handler."
           );
         }
-        if (mode === "source" || destroyed) return false;
+        if (mode === "source" || destroyed || context && !context.valid()) return false;
         const urlError = imageURLError(url);
         if (urlError) throw new Error(urlError);
         const width = await imageWidth(url);
+        if (context && !context.valid()) return false;
         return placeImage(url, width ? `image (${width}px)` : "image", savedRange);
-      } catch (err) {
-        showError(err instanceof Error ? err.message : String(err));
+      } catch (error) {
+        if (context?.valid()) context.error(error.message || "Image insertion failed");
         return false;
       }
     };
     const insertImageURL = (url) => {
       if (mode === "source" || destroyed) return false;
-      if (!images.enabled) {
-        showError("Images are disabled");
-        return false;
-      }
+      if (!images.enabled) return false;
       const trimmed = url.trim();
       const urlError = imageURLError(trimmed);
-      if (urlError) {
-        showError(urlError);
-        return false;
-      }
+      if (urlError) return false;
       return placeImage(trimmed);
     };
-    const imagePrompt = () => {
-      const url = window.prompt("Enter the image URL");
-      return url ? insertImageURL(url) : false;
-    };
-    const imagePicker = () => {
-      if (!pickerInput) {
-        pickerInput = document.createElement("input");
-        pickerInput.type = "file";
-        pickerInput.accept = unrestricted ? "" : IMAGE_TYPES.join(",");
-        pickerInput.style.display = "none";
-        listen(pickerInput, "change", () => {
-          const file = pickerInput.files && pickerInput.files[0];
-          pickerInput.value = "";
-          if (file) handleFile(file);
-        });
-        element.appendChild(pickerInput);
-        cleanups.push(() => pickerInput.remove());
-      }
-      pickerInput.click();
-      return true;
-    };
-    const imageResult = () => {
-      if (!images.enabled) {
-        showError("Images are disabled");
+    function positionInsertion() {
+      if (!insertionUI) return;
+      const { popup, trigger } = insertionUI;
+      const anchor = (trigger.closest(".lightmetal-overflow") ? overflow.trigger : trigger).getBoundingClientRect();
+      popup.style.maxWidth = `${Math.max(0, window.innerWidth - 16)}px`;
+      popup.style.maxHeight = `${Math.max(0, window.innerHeight - 16)}px`;
+      const box = popup.getBoundingClientRect();
+      popup.style.left = `${Math.max(8, Math.min(anchor.left, window.innerWidth - box.width - 8))}px`;
+      popup.style.top = `${Math.max(8, Math.min(anchor.bottom + 4, window.innerHeight - box.height - 8))}px`;
+    }
+    function openInsertion(kind, trigger) {
+      if (destroyed || composing || mode === "source" || !trigger) return false;
+      if (insertionUI?.trigger === trigger) {
+        closeInsertion(true);
         return false;
       }
-      return images.allowURL ? imagePrompt() : imagePicker();
-    };
+      closeInsertion();
+      formatting.close();
+      closeTableMenu();
+      closeTableDropdown();
+      overflow.close();
+      const selection = document.getSelection();
+      let range = selection?.rangeCount ? selection.getRangeAt(0) : null;
+      if (!range || !content.contains(range.commonAncestorContainer)) {
+        range = document.createRange();
+        range.selectNodeContents(content);
+        range.collapse(false);
+      }
+      range = range.cloneRange();
+      const anchorAt = (node) => (node.nodeType === Node.ELEMENT_NODE ? node : node.parentElement)?.closest("a");
+      const candidate = anchorAt(range.startContainer);
+      const link = kind === "link" && candidate && candidate === anchorAt(range.endContainer) && content.contains(candidate) ? candidate : null;
+      const popup = document.createElement("form");
+      popup.className = "lightmetal-table-dropdown lightmetal-insertion-popup";
+      popup.id = `lightmetal-insertion-${++tableDropdownCounter}`;
+      popup.setAttribute("role", "dialog");
+      popup.setAttribute("aria-label", kind === "image" ? "Insert Image" : link ? "Edit Link" : "Insert Link");
+      if (typeof popup.showPopover === "function") popup.setAttribute("popover", "manual");
+      const state = { popup, trigger, range, link, busy: false };
+      insertionUI = state;
+      const valid = () => {
+        if (insertionUI !== state || destroyed || composing || state.formComposing || mode === "source") return false;
+        if (insertionObserver.takeRecords().length || !content.contains(range.commonAncestorContainer) || link && !content.contains(link)) {
+          closeInsertion();
+          return false;
+        }
+        return true;
+      };
+      const error = document.createElement("p");
+      error.className = "lightmetal-insertion-error";
+      error.setAttribute("role", "alert");
+      error.hidden = true;
+      const fail = (message) => {
+        if (insertionUI === state) {
+          error.textContent = message;
+          error.hidden = false;
+          positionInsertion();
+        }
+      };
+      const heading = document.createElement("h3");
+      heading.textContent = popup.getAttribute("aria-label");
+      popup.append(heading);
+      const field = (label, value = "") => {
+        const wrapper = document.createElement("label");
+        wrapper.textContent = label;
+        const input = document.createElement("input");
+        input.type = "text";
+        input.value = value;
+        input.setAttribute("aria-label", label);
+        wrapper.append(input);
+        return { wrapper, input };
+      };
+      const makeButton = (label, handler) => {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.textContent = label;
+        if (handler) listenInsertion(button, "click", handler);
+        return button;
+      };
+      const footer = document.createElement("div");
+      footer.className = "lightmetal-insertion-footer";
+      const cancel = makeButton("Cancel", () => closeInsertion(true));
+      const submit = document.createElement("button");
+      submit.type = "submit";
+      submit.textContent = link ? "Save" : "Insert";
+      const restore = (target) => {
+        content.focus();
+        const selection2 = document.getSelection();
+        selection2.removeAllRanges();
+        selection2.addRange(target);
+        applyEditingSettings();
+      };
+      const replace = (html, target = range, command = "insertHTML") => {
+        if (!valid()) return false;
+        restore(target);
+        insertionObserver.disconnect();
+        const ok = exec(command, html);
+        if (ok) {
+          if (insertionUI === state) closeInsertion();
+          if (!destroyed && mode !== "source" && !insertionUI) content.focus();
+        } else {
+          insertionObserver.observe(content, { subtree: true, childList: true, characterData: true, attributes: true });
+          fail("The browser could not apply this change");
+        }
+        return ok;
+      };
+      let firstField;
+      if (kind === "link") {
+        const originalText = link ? link.textContent : range.toString();
+        const url = field("URL", link?.getAttribute("href") || "");
+        url.input.placeholder = "https://example.com";
+        url.input.autocomplete = "url";
+        const text = field("Display Text", originalText);
+        const targetLabel = document.createElement("label");
+        targetLabel.className = "lightmetal-insertion-check";
+        const target = document.createElement("input");
+        target.type = "checkbox";
+        target.checked = link?.getAttribute("target") === "_blank";
+        targetLabel.append(target, document.createTextNode("Open in new tab"));
+        popup.append(url.wrapper, text.wrapper, targetLabel);
+        firstField = url.input;
+        const allowed = () => !!url.input.value.trim() && (unrestricted || allowLinkURL(url.input.value.trim(), baseURI, true));
+        const update = () => {
+          submit.disabled = !allowed();
+        };
+        listenInsertion(url.input, "input", update);
+        update();
+        if (link) {
+          const remove = makeButton("Remove Link", () => {
+            const selected = document.createRange();
+            if (!valid()) return;
+            selected.selectNodeContents(link);
+            replace(null, selected, "unlink");
+          });
+          footer.append(remove);
+        }
+        listenInsertion(popup, "submit", (event) => {
+          event.preventDefault();
+          if (!allowed() || !valid()) return;
+          const anchor = link ? link.cloneNode(true) : document.createElement("a");
+          anchor.setAttribute("href", url.input.value.trim());
+          if (target.checked) {
+            anchor.setAttribute("target", "_blank");
+            const rel = new Set((anchor.getAttribute("rel") || "").split(/\s+/).filter(Boolean));
+            rel.add("noopener");
+            rel.add("noreferrer");
+            anchor.setAttribute("rel", [...rel].join(" "));
+          } else if (anchor.getAttribute("target") === "_blank") anchor.removeAttribute("target");
+          if (text.input.value !== originalText || !link && range.collapsed) anchor.textContent = text.input.value || url.input.value.trim();
+          else if (!link) anchor.append(range.cloneContents());
+          const selected = range.cloneRange();
+          if (link) selected.selectNode(link);
+          replace(anchor.outerHTML, selected);
+        });
+      } else {
+        const tabs = document.createElement("div");
+        tabs.className = "lightmetal-insertion-tabs";
+        tabs.setAttribute("role", "tablist");
+        tabs.setAttribute("aria-label", "Image source");
+        const upload = document.createElement("div"), urlPanel = document.createElement("div");
+        const url = field("Image URL");
+        url.input.placeholder = "https://example.com/image.png";
+        url.input.autocomplete = "url";
+        const alt = field("Alt Text");
+        urlPanel.append(url.wrapper, alt.wrapper);
+        const status = document.createElement("p");
+        status.setAttribute("role", "status");
+        status.hidden = true;
+        const file = document.createElement("input");
+        file.type = "file";
+        file.accept = unrestricted ? "" : IMAGE_TYPES.join(",");
+        file.hidden = true;
+        const browse = makeButton("Drag an image here or click to browse", () => file.click());
+        browse.className = "lightmetal-image-dropzone";
+        upload.append(browse, file, status);
+        let activeTab = "upload";
+        const tabButtons = [];
+        const allowed = () => !!url.input.value.trim() && !imageURLError(url.input.value.trim());
+        const update = () => {
+          submit.hidden = activeTab !== "url";
+          submit.disabled = state.busy || !allowed();
+        };
+        for (const [name, label, panel] of [["upload", "Upload", upload], ["url", "URL", urlPanel]]) {
+          if (name === "url" && !images.allowURL) continue;
+          const tab = makeButton(label, () => {
+            if (state.busy) return;
+            activeTab = name;
+            for (const entry of tabButtons) {
+              entry.tab.setAttribute("aria-selected", String(entry.name === name));
+              entry.tab.tabIndex = entry.name === name ? 0 : -1;
+              entry.panel.hidden = entry.name !== name;
+            }
+            update();
+            positionInsertion();
+          });
+          tab.setAttribute("role", "tab");
+          tab.id = `${popup.id}-${name}`;
+          tab.setAttribute("aria-controls", `${tab.id}-panel`);
+          panel.id = `${tab.id}-panel`;
+          panel.setAttribute("role", "tabpanel");
+          panel.setAttribute("aria-labelledby", tab.id);
+          tab.setAttribute("aria-selected", String(name === activeTab));
+          tab.tabIndex = name === activeTab ? 0 : -1;
+          panel.hidden = name !== activeTab;
+          tabButtons.push({ name, tab, panel });
+          tabs.append(tab);
+        }
+        listenInsertion(tabs, "keydown", (event) => {
+          if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key) || state.busy) return;
+          event.preventDefault();
+          const index = tabButtons.findIndex((entry) => entry.tab === document.activeElement);
+          const next = event.key === "Home" ? 0 : event.key === "End" ? tabButtons.length - 1 : (index + (event.key === "ArrowLeft" ? -1 : 1) + tabButtons.length) % tabButtons.length;
+          tabButtons[next].tab.click();
+          tabButtons[next].tab.focus();
+        });
+        const uploadFile = async (selected) => {
+          if (!valid() || state.busy) return;
+          state.busy = true;
+          browse.disabled = true;
+          tabButtons.forEach((entry) => entry.tab.disabled = true);
+          error.hidden = true;
+          status.textContent = "Processing image\u2026";
+          status.hidden = false;
+          update();
+          const ok = await handleFile(selected, { range, valid, error: fail });
+          if (ok) {
+            if (insertionUI === state) closeInsertion();
+            if (!destroyed && mode !== "source") content.focus();
+            return;
+          }
+          if (insertionUI !== state) return;
+          state.busy = false;
+          browse.disabled = false;
+          tabButtons.forEach((entry) => entry.tab.disabled = false);
+          status.hidden = true;
+          update();
+        };
+        listenInsertion(file, "change", () => {
+          const selected = file.files?.[0];
+          file.value = "";
+          if (selected) uploadFile(selected);
+        });
+        listenInsertion(upload, "dragover", (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+        });
+        listenInsertion(upload, "drop", (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          if (images.dragDrop) uploadFile(event.dataTransfer?.files?.[0]);
+        });
+        listenInsertion(url.input, "input", update);
+        listenInsertion(popup, "submit", (event) => {
+          event.preventDefault();
+          if (activeTab !== "url" || state.busy || !allowed() || !valid()) return;
+          restore(range);
+          insertionObserver.disconnect();
+          if (placeImage(url.input.value.trim(), alt.input.value, range)) {
+            if (insertionUI === state) closeInsertion();
+          } else {
+            insertionObserver.observe(content, { subtree: true, childList: true, characterData: true, attributes: true });
+            fail("Image insertion failed");
+          }
+        });
+        popup.append(tabs, upload);
+        if (images.allowURL) popup.append(urlPanel);
+        firstField = browse;
+        update();
+      }
+      footer.append(cancel, submit);
+      popup.append(error, footer);
+      listenInsertion(popup, "compositionstart", () => {
+        state.formComposing = true;
+      });
+      listenInsertion(popup, "compositionend", () => {
+        state.formComposing = false;
+      });
+      listenInsertion(popup, "keydown", (event) => {
+        if (event.key === "Escape" && !event.isComposing && !state.formComposing) {
+          event.preventDefault();
+          event.stopPropagation();
+          closeInsertion(true);
+        }
+      });
+      element.append(popup);
+      insertionObserver.observe(content, { subtree: true, childList: true, characterData: true, attributes: true });
+      trigger.setAttribute("aria-controls", popup.id);
+      trigger.setAttribute("aria-expanded", "true");
+      if (popup.hasAttribute("popover")) popup.showPopover();
+      positionInsertion();
+      firstField.focus();
+      return false;
+    }
+    const imageResult = (button) => images.enabled ? openInsertion("image", button) : false;
     const onDrop = (event) => {
       const data = event.dataTransfer;
       if (!data) return;
@@ -875,7 +1653,6 @@ var lightmetal = (() => {
     listen(element, "dragleave", onDragLeave);
     listen(content, "paste", onPaste);
     cleanups.push(() => {
-      clearTimeout(errorTimer);
       clearTimeout(formatTimer);
     });
     const cellAt = (node) => {
@@ -986,7 +1763,6 @@ var lightmetal = (() => {
       if (!deleting) {
         const rows = Array.from(clone.rows);
         if ((command === "rowAbove" || command === "rowBelow" || command === "columnLeft" || command === "columnRight") && !tableSizeAllowed(rows.length, tableWidth(clone))) {
-          showError(TABLE_SIZE_ERROR);
           return false;
         }
         const ids = new Set(Array.from(clone.querySelectorAll("th[id], td[id]"), (cell) => cell.id));
@@ -1048,7 +1824,7 @@ var lightmetal = (() => {
       if (!tableMenu || tableMenu.hidden) return;
       tableMenu.style.maxWidth = `${Math.max(0, window.innerWidth - 16)}px`;
       tableMenu.style.maxHeight = `${Math.max(0, window.innerHeight - 16)}px`;
-      const anchor = tableTrigger.getBoundingClientRect(), popup = tableMenu.getBoundingClientRect();
+      const anchor = tableAnchor().getBoundingClientRect(), popup = tableMenu.getBoundingClientRect();
       tableMenu.style.left = `${Math.max(8, Math.min(anchor.left, window.innerWidth - popup.width - 8))}px`;
       const below = anchor.bottom + 4;
       tableMenu.style.top = `${below + popup.height <= window.innerHeight - 8 ? below : Math.max(8, Math.min(anchor.top - popup.height - 4, window.innerHeight - popup.height - 8))}px`;
@@ -1116,6 +1892,9 @@ var lightmetal = (() => {
         closeTableMenu(true);
         return false;
       }
+      closeInsertion();
+      overflow.close();
+      formatting.close();
       closeTableDropdown();
       captureTableRange();
       if (!tableMenu) createTableMenu();
@@ -1156,6 +1935,7 @@ var lightmetal = (() => {
       }
       updateTableControls();
       if (settings.onChange) settings.onChange(content.innerHTML);
+      updateFullscreenLayout();
     };
     const onKeyDown = (event) => {
       if (mode === "source") return;
@@ -1180,6 +1960,7 @@ var lightmetal = (() => {
     };
     const onSourceInput = () => {
       if (settings.onChange) settings.onChange(source.value);
+      updateFullscreenLayout();
     };
     const applyEditingSettings = () => {
       exec(PARAGRAPH_SEPARATOR, separator);
@@ -1189,6 +1970,20 @@ var lightmetal = (() => {
     listen(content, "input", onInput);
     listen(content, "keydown", onKeyDown);
     listen(source, "input", onSourceInput);
+    const formatting = createFormattingControls({
+      element,
+      content,
+      listen,
+      exec,
+      canEdit: () => !destroyed && mode === "wysiwyg",
+      applySettings: applyEditingSettings,
+      onInteraction: () => {
+        closeInsertion();
+        overflow.close();
+        closeTableMenu();
+        closeTableDropdown();
+      }
+    });
     const toolbarButtons = [];
     const buttons = [];
     actions.forEach((action, index) => {
@@ -1216,13 +2011,35 @@ var lightmetal = (() => {
           }
         });
       }
+      if (action.result === linkResult || action.result === imageResult) {
+        button.setAttribute("aria-haspopup", "dialog");
+        button.setAttribute("aria-expanded", "false");
+        listen(button, "mousedown", (event) => event.preventDefault());
+        listen(button, "keydown", (event) => {
+          if (event.key === "ArrowDown" && !event.altKey && !event.ctrlKey && !event.metaKey) {
+            event.preventDefault();
+            action.result(button);
+          }
+        });
+      }
+      const formattingName = Object.keys(formattingActions).find((name2) => action.result === formattingActions[name2].result || action.name === name2 && action.result == null);
+      if (formattingName) formatting.bind(formattingName, button);
+      if (action.result === toggleFullscreen) {
+        listen(button, "mousedown", (event) => event.preventDefault());
+        if (action.state === fullscreenAction.state) fullscreenButtons.push(button);
+      }
       const onClick = () => {
-        if (mode === "source" && action !== sourceAction && !(action.name === "source" && action.result === sourceAction.result)) return;
+        if (mode === "source" && action !== sourceAction && action.name !== "fullscreen" && !(action.name === "source" && action.result === sourceAction.result)) return;
+        if (action.result === toggleFullscreen) {
+          toggleFullscreen();
+          return;
+        }
         if (mode === "wysiwyg") applyEditingSettings();
         if (action.result === tableResult) tableTrigger = button;
-        if (action.result()) content.focus();
+        const result = action.result === linkResult || action.result === imageResult ? action.result(button) : action.result();
+        if (result && mode === "wysiwyg") content.focus();
       };
-      listen(button, "click", onClick);
+      if (!formattingName) listen(button, "click", onClick);
       if (action.state) {
         button.setAttribute("aria-pressed", "false");
         const update = () => {
@@ -1236,12 +2053,24 @@ var lightmetal = (() => {
       }
       actionbar.appendChild(button);
       buttons.push(button);
-      if (!settings.actions) {
-        const name = Object.keys(defaultActions).find((name2) => defaultActions[name2] === resolvedActions[index]) || "source";
-        toolbarButtons.push({ button, name });
+      const name = Object.keys(defaultActions).find((name2) => defaultActions[name2] === resolvedActions[index]) || resolvedActions[index].name || (resolvedActions[index] === sourceAction || resolvedActions[index].result === sourceAction.result ? "source" : "custom");
+      if (!settings.actions && ["blocks", "bold", "text", "alignment", "table", "fullscreen", "more", "undo"].includes(name)) button.classList.add("lightmetal-group-start");
+      toolbarButtons.push({ button, name, secondary: !settings.actions && ["formatting", "indentation"].includes(name) });
+    });
+    const overflow = createToolbarOverflow({
+      element,
+      toolbar: actionbar,
+      entries: toolbarButtons,
+      listen,
+      defaultToolbar: !settings.actions,
+      closeMenus: () => {
+        closeInsertion();
+        formatting.close();
+        closeTableMenu();
+        closeTableDropdown();
       }
     });
-    if (!settings.actions) cleanups.push(groupToolbar(actionbar, toolbarButtons));
+    cleanups.push(() => overflow.destroy());
     const setToolbarTabIndex = (tabIndex) => {
       for (const button of buttons) if (button.tabIndex !== tabIndex) button.tabIndex = tabIndex;
     };
@@ -1254,6 +2083,11 @@ var lightmetal = (() => {
       if (tableDropdown && !tableDropdown.hidden && !tableDropdown.contains(event.target) && !tableTrigger?.contains(event.target)) closeTableDropdown();
     };
     const onTableEscape = (event) => {
+      if (event.key === "Escape" && insertionUI && !insertionUI.formComposing && !event.isComposing && !composing) {
+        event.preventDefault();
+        closeInsertion(true);
+        return;
+      }
       if (event.key === "Escape" && tableDropdown && !tableDropdown.hidden) {
         event.preventDefault();
         closeTableDropdown(true);
@@ -1264,6 +2098,32 @@ var lightmetal = (() => {
     };
     listen(document, "pointerdown", onTableOutsideClick);
     listen(document, "keydown", onTableEscape);
+    for (const field of [content, source]) {
+      listen(field, "compositionstart", () => {
+        composing = true;
+        closeInsertion();
+      });
+      listen(field, "compositionend", () => {
+        composing = false;
+      });
+    }
+    listen(document, "keydown", (event) => {
+      if (event.key !== "Escape" || event.defaultPrevented || event.isComposing || composing || !fullscreen) return;
+      if (insertionUI || tableMenu && !tableMenu.hidden || tableDropdown && !tableDropdown.hidden || element.querySelector(".lightmetal-format-popup:not([hidden])")) return;
+      event.preventDefault();
+      event.stopPropagation();
+      exitFullscreen();
+    });
+    listen(document, "pointerdown", (event) => {
+      if (insertionUI && !insertionUI.popup.contains(event.target) && !insertionUI.trigger.contains(event.target)) closeInsertion();
+    });
+    listen(document, "focusin", (event) => {
+      if (insertionUI && !insertionUI.popup.contains(event.target) && !insertionUI.trigger.contains(event.target) && event.target !== content) closeInsertion();
+    });
+    listen(window, "resize", positionInsertion);
+    listen(window, "scroll", positionInsertion, true);
+    listen(window, "resize", updateFullscreenLayout);
+    listen(window, "scroll", updateFullscreenLayout, true);
     listen(window, "resize", positionTableDropdown);
     listen(window, "scroll", positionTableDropdown, true);
     listen(window, "resize", positionTableMenu);
@@ -1271,15 +2131,19 @@ var lightmetal = (() => {
     listen(document, "focusin", (event) => {
       if (tableMenu && !tableMenu.hidden && !tableMenu.contains(event.target) && !actionbar.contains(event.target)) closeTableMenu();
     });
+    element.classList.add("lightmetal-html");
     element.appendChild(actionbar);
     element.appendChild(tablebar);
     element.appendChild(content);
     if (hasSource) element.appendChild(source);
+    element.appendChild(overflow.popup);
     const getHTML = () => mode === "source" ? source.value : content.innerHTML;
     const setHTML = (html) => {
+      closeInsertion();
       clearTimeout(formatTimer);
       closeTableMenu();
       closeTableDropdown();
+      formatting.close();
       if (sanitized) html = sanitizeHTML(html, baseURI, images.allowBase64);
       if (mode === "source") source.value = html;
       else content.innerHTML = html;
@@ -1299,14 +2163,17 @@ var lightmetal = (() => {
       if (imgSource && typeof Blob !== "undefined" && imgSource instanceof Blob) {
         return handleFile(imgSource);
       }
-      showError("insertImage expects a URL, data URI, or File");
       return Promise.resolve(false);
     };
     const destroy = () => {
       if (destroyed) return;
       destroyed = true;
+      exitFullscreen(false);
+      fullscreenResize?.disconnect();
+      closeInsertion();
       closeTableMenu();
       closeTableDropdown();
+      formatting.destroy();
       tableMenu?.remove();
       tableDropdown?.remove();
       cleanups.forEach((fn) => fn());
@@ -1315,6 +2182,7 @@ var lightmetal = (() => {
       activeCell = null;
       content.remove();
       source.remove();
+      if (ownsHTMLClass) element.classList.remove("lightmetal-html");
     };
     return { element, content, source, getHTML, setHTML, getText, insertTable, insertImage, destroy };
   };

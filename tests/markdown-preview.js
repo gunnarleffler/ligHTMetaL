@@ -61,7 +61,7 @@ async function previewChecks(browser, base, name) {
         !__retainedSpan.hidden && __retainedSpan.textContent === 'const' && target.lastChild === __retainedText && __retainedText.data === 'spare root text';
     }), true, 'cleared spare nodes revive with their identity and content intact');
     await button.click();
-    await page.evaluate(() => { window.__render = () => '<script>window.__bad = true</script><img src="https://example.invalid/image" alt="photo"><iframe src="https://example.invalid/frame"></iframe><a href="javascript:alert(1)" onclick="alert(1)">bad</a><pre><code class="hljs evil"><span class="hljs-keyword" style="background:url(https://example.invalid/style)">const</span></code></pre>'; });
+    await page.evaluate(() => { window.__render = () => '<script>window.__bad = true</script><img src="javascript:alert(1)" alt="photo"><iframe src="https://example.invalid/frame"></iframe><a href="javascript:alert(1)" onclick="alert(1)">bad</a><pre><code class="hljs evil"><span class="hljs-keyword" style="background:url(https://example.invalid/style)">const</span></code></pre>'; });
     await button.click(); await preview.locator("code:visible").waitFor();
     assert.equal(await preview.locator("script,img,iframe,[onclick],[style],[href]").count(), 0);
     assert.equal(await preview.locator("code:visible").getAttribute("class"), "hljs");

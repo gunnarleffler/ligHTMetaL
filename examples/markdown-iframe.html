@@ -61,6 +61,8 @@
     <script src="../dist/MeltDown.js"></script>
     <script src="../dist/polish.js"></script>
     <script src="../examples/polish-demo.js"></script>
+    <script src="../examples/markdown-samples.js"></script>
+    <script src="../examples/markdown-demo.js"></script>
     <script src="../examples/markdown-iframe-editor.js"></script>
   </template>
   <script src="../dist/polish.js"></script>
@@ -75,6 +77,8 @@
         if (frame.contentDocument.URL !== "about:blank") document.getElementById("frame-status").textContent = "The editor could not load. Check the local assets.";
         return;
       }
+      // Change view after the child document finishes loading.
+      frame.contentWindow.markdownDemo.startSplit(editor);
       document.getElementById("read-markdown").disabled = false;
       document.getElementById("load-markdown").disabled = false;
       document.getElementById("frame-status").textContent = "Ready. The editor runs inside the frame; native undo scope depends on the browser.";

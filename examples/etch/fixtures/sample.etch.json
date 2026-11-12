@@ -1,0 +1,351 @@
+{
+  "format": "lightmetal-etch",
+  "version": 1,
+  "background": null,
+  "layers": [
+    {
+      "id": "sample-base",
+      "name": "Shapes & paths",
+      "visible": true,
+      "locked": false,
+      "offset": [
+        0,
+        0
+      ],
+      "elements": [
+        {
+          "id": "card",
+          "type": "rect",
+          "transform": [
+            1,
+            0,
+            0,
+            1,
+            0,
+            0
+          ],
+          "x": -250,
+          "y": -120,
+          "width": 500,
+          "height": 240,
+          "fill": "#F1F5FB",
+          "stroke": "#CBD5E1",
+          "strokeWidth": 2,
+          "lineJoin": "round",
+          "miterLimit": 4
+        },
+        {
+          "id": "badge",
+          "type": "rect",
+          "transform": [
+            1,
+            0.12,
+            -0.12,
+            1,
+            -10,
+            6
+          ],
+          "x": -225,
+          "y": -90,
+          "width": 98,
+          "height": 80,
+          "fill": "#DBEAFE",
+          "stroke": "#556EE7",
+          "strokeWidth": 3,
+          "lineJoin": "round",
+          "miterLimit": 4
+        },
+        {
+          "id": "ellipse",
+          "type": "ellipse",
+          "transform": [
+            1,
+            0,
+            0,
+            1,
+            0,
+            0
+          ],
+          "cx": 170,
+          "cy": -48,
+          "rx": 52,
+          "ry": 36,
+          "fill": "#D1FAE5",
+          "stroke": "#0F766E",
+          "strokeWidth": 3
+        },
+        {
+          "id": "curves",
+          "type": "path",
+          "transform": [
+            1,
+            0,
+            0,
+            1,
+            0,
+            0
+          ],
+          "commands": [
+            [
+              "M",
+              -100,
+              -60
+            ],
+            [
+              "C",
+              -50,
+              -130,
+              20,
+              10,
+              85,
+              -65
+            ]
+          ],
+          "fill": null,
+          "fillRule": "nonzero",
+          "stroke": "#556EE7",
+          "strokeWidth": 5,
+          "lineCap": "round",
+          "lineJoin": "round",
+          "miterLimit": 4
+        },
+        {
+          "id": "hole",
+          "type": "path",
+          "transform": [
+            1,
+            0,
+            0,
+            1,
+            0,
+            0
+          ],
+          "commands": [
+            [
+              "M",
+              -205,
+              0
+            ],
+            [
+              "L",
+              -130,
+              0
+            ],
+            [
+              "L",
+              -130,
+              75
+            ],
+            [
+              "L",
+              -205,
+              75
+            ],
+            [
+              "Z"
+            ],
+            [
+              "M",
+              -185,
+              20
+            ],
+            [
+              "L",
+              -150,
+              20
+            ],
+            [
+              "L",
+              -150,
+              55
+            ],
+            [
+              "L",
+              -185,
+              55
+            ],
+            [
+              "Z"
+            ]
+          ],
+          "fill": "#99F6E4",
+          "fillRule": "evenodd",
+          "stroke": "#0F766E",
+          "strokeWidth": 2,
+          "lineCap": "round",
+          "lineJoin": "round",
+          "miterLimit": 4
+        },
+        {
+          "id": "line",
+          "type": "line",
+          "transform": [
+            1,
+            0,
+            0,
+            1,
+            0,
+            0
+          ],
+          "start": [
+            105,
+            38
+          ],
+          "end": [
+            215,
+            85
+          ],
+          "stroke": "#EA580C",
+          "strokeWidth": 5,
+          "lineCap": "square"
+        }
+      ]
+    },
+    {
+      "id": "sample-ink",
+      "name": "Pressure ink",
+      "visible": true,
+      "locked": false,
+      "offset": [
+        0,
+        0
+      ],
+      "elements": [
+        {
+          "id": "stroke",
+          "type": "stroke",
+          "transform": [
+            1,
+            0,
+            0,
+            1,
+            0,
+            0
+          ],
+          "points": [
+            [
+              -85,
+              35,
+              0.1
+            ],
+            [
+              -60,
+              10,
+              0.2
+            ],
+            [
+              -35,
+              60,
+              0.55
+            ],
+            [
+              -10,
+              15,
+              0.85
+            ],
+            [
+              15,
+              60,
+              1
+            ],
+            [
+              40,
+              18,
+              0.7
+            ],
+            [
+              65,
+              40,
+              0.3
+            ]
+          ],
+          "color": "#8844AA",
+          "width": 14,
+          "pressure": true
+        },
+        {
+          "id": "dot",
+          "type": "stroke",
+          "transform": [
+            1,
+            0,
+            0,
+            1,
+            0,
+            0
+          ],
+          "points": [
+            [
+              82,
+              72,
+              0.7
+            ]
+          ],
+          "color": "#556EE7",
+          "width": 16,
+          "pressure": true
+        }
+      ]
+    },
+    {
+      "id": "sample-image",
+      "name": "PNG & overlay",
+      "visible": true,
+      "locked": false,
+      "offset": [
+        0,
+        0
+      ],
+      "elements": [
+        {
+          "id": "image",
+          "type": "image",
+          "transform": [
+            1,
+            0,
+            0.18,
+            1,
+            0,
+            0
+          ],
+          "assetId": "sample-png",
+          "x": 125,
+          "y": -18,
+          "width": 75,
+          "height": 55,
+          "alt": "Original translucent blue pixel, enlarged"
+        },
+        {
+          "id": "overlay",
+          "type": "rect",
+          "transform": [
+            1,
+            0,
+            0,
+            1,
+            0,
+            0
+          ],
+          "x": 203,
+          "y": -85,
+          "width": 28,
+          "height": 28,
+          "fill": "#FBBF24",
+          "stroke": null,
+          "strokeWidth": 0,
+          "lineJoin": "round",
+          "miterLimit": 4
+        }
+      ]
+    }
+  ],
+  "assets": [
+    {
+      "id": "sample-png",
+      "mime": "image/png",
+      "width": 1,
+      "height": 1,
+      "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGPQqDjRAAAEHQHpAkP92gAAAABJRU5ErkJggg=="
+    }
+  ]
+}

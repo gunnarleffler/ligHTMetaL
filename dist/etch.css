@@ -1,0 +1,277 @@
+/* ligHTMetaL::Etch — scoped component styles, no generated/build step.
+ * The shared mode contract matches Lightmetal/poliSH and also works standalone.
+ * No attribute means system preference; a nearer "auto" resets an inherited pin.
+ */
+[data-lightmetal-theme="light"] { --lightmetal-color-scheme: light; color-scheme: light; }
+[data-lightmetal-theme="dark"] { --lightmetal-color-scheme: dark; color-scheme: dark; }
+[data-lightmetal-theme="auto"] { --lightmetal-color-scheme: light dark; color-scheme: light dark; }
+
+.etch {
+  /* Private defaults leave public --etch-* overrides inheritable from host themes. */
+  --etch-default-bg: light-dark(#ffffff, #16181c);
+  --etch-default-panel: light-dark(#f7f8fa, #1e2126);
+  --etch-default-ink: light-dark(#24292f, #e6e9ee);
+  --etch-default-border: light-dark(#e3e6eb, #2c313a);
+  --etch-default-accent: light-dark(#556ee7, #8fa0ff);
+  --etch-default-focus: var(--etch-accent, var(--etch-default-accent));
+  /* Neutral paper keeps existing dark ink readable; this backdrop never exports. */
+  --etch-default-canvas: #ffffff;
+  --etch-default-muted: light-dark(#6a737d, #9aa4b2);
+  --etch-default-hover: light-dark(#edf0f4, #262b33);
+  --etch-default-active-bg: light-dark(rgba(85, 110, 231, .12), rgba(143, 160, 255, .18));
+  color-scheme: var(--lightmetal-color-scheme, light dark);
+  container-type: inline-size;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 240px;
+  height: 100%;
+  color: var(--etch-ink, var(--etch-default-ink));
+  background: var(--etch-bg, var(--etch-default-bg));
+  border: 1px solid var(--etch-border, var(--etch-default-border));
+  border-radius: 8px;
+  overflow: hidden;
+  overscroll-behavior: none;
+  touch-action: manipulation;
+  font: 14px/1.4 system-ui, sans-serif;
+}
+.etch:fullscreen, .etch.etch-expanded {
+  position: fixed;
+  inset: 0;
+  z-index: 2147483647;
+  width: 100%;
+  height: 100dvh;
+  max-width: none;
+  max-height: none;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+}
+.etch *, .etch *::before, .etch *::after { box-sizing: border-box; }
+.etch [hidden] { display: none !important; }
+.etch-toolbar { display: flex; align-items: center; gap: 6px; padding: 5px 8px; flex-shrink: 0; border-bottom: 1px solid var(--etch-border, var(--etch-default-border)); }
+.etch-toolbar-scroll { display: flex; align-items: center; gap: 8px; overflow-x: auto; scrollbar-width: none; min-width: 0; }
+.etch-toolbar-group { display: flex; align-items: center; gap: 2px; flex-shrink: 0; }
+.etch-toolbar-group + .etch-toolbar-group { border-left: 1px solid var(--etch-border, var(--etch-default-border)); padding-left: 8px; }
+.etch-toolbar-scroll, .etch-quick-toolbar, .etch-sidebar-title-actions { overscroll-behavior: none; touch-action: pan-x; }
+.etch-layers, .etch-properties-content, .etch-layer-section, .etch-dialog { overscroll-behavior: none; }
+.etch input[type="range"] { touch-action: none; }
+.etch-shape-split { display: flex; border: 1px solid var(--etch-border, var(--etch-default-border)); border-radius: 6px; }
+.etch-shape-split > .etch-button + .etch-button { border-left: 1px solid var(--etch-border, var(--etch-default-border)); }
+.etch-shape-menu, .etch-export-menu { position: fixed; inset: auto; margin: 0; padding: 6px; border: 1px solid var(--etch-border, var(--etch-default-border)); border-radius: 8px; background: var(--etch-panel, var(--etch-bg, var(--etch-default-panel))); color: inherit; box-shadow: 0 6px 24px #0003; }
+.etch-shape-menu .etch-button, .etch-export-menu .etch-button { display: flex; width: 100%; justify-content: flex-start; }
+.etch-export-menu .etch-button { min-height: 40px; }
+.etch-export-menu { min-width: 160px; }
+.etch-shape-menu [aria-pressed="true"] { color: var(--etch-accent, var(--etch-default-accent)); background: var(--etch-active-bg, var(--etch-default-active-bg)); }
+.etch-quick-toolbar {
+  display: flex; align-items: center; gap: 8px; flex: 0 0 auto; min-width: 0;
+  height: 48px; padding: 3px 8px; overflow-x: auto; overflow-y: hidden;
+  border-bottom: 1px solid var(--etch-border, var(--etch-default-border));
+  animation: etch-quick-open 100ms ease-out;
+}
+.etch-quick-toolbar > *, .etch-quick-group > * { flex-shrink: 0; }
+.etch-quick-title { font-size: 12px; color: var(--etch-accent, var(--etch-default-accent)); }
+.etch-quick-group { display: flex; align-items: center; gap: 3px; white-space: nowrap; }
+.etch-quick-toolbar .etch-button { min-width: 40px; width: 40px; height: 40px; padding: 4px; }
+.etch-quick-toolbar :is(select, input[type="color"]) { min-height: 40px; font: inherit; color: inherit; background: var(--etch-panel, var(--etch-bg, var(--etch-default-panel))); border: 1px solid var(--etch-border, var(--etch-default-border)); border-radius: 5px; }
+.etch-quick-toolbar input[type="color"] { width: 40px; padding: 3px; }
+.etch-quick-toolbar label { min-height: 40px; cursor: pointer; }
+.etch-quick-toolbar input[type="range"] { width: 104px; min-height: 40px; }
+.etch-color-swatch::before { content: ''; width: 24px; height: 24px; border-radius: 50%; background: var(--etch-swatch); box-shadow: inset 0 0 0 1px #8888; }
+.etch-quick-toolbar [aria-pressed="true"] { border-color: var(--etch-accent, var(--etch-default-accent)); background: var(--etch-active-bg, var(--etch-default-active-bg)); }
+.etch-width-mark { width: 26px; border-radius: 8px; background: currentColor; }
+.etch-size-mark { border-radius: 50%; border: 1px solid currentColor; background: var(--etch-active-bg, var(--etch-default-active-bg)); }
+.etch-quick-preview { width: 82px; height: 38px; }
+@keyframes etch-quick-open { from { opacity: .5; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .etch-quick-toolbar { animation: none; } }
+.etch-toolbar, .etch-quick-toolbar, .etch-sidebar, .etch-status { background: var(--etch-panel, var(--etch-bg, var(--etch-default-panel))); }
+.etch-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  color: inherit;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  padding: 5px 8px;
+  min-height: 32px;
+  font: inherit;
+  cursor: pointer;
+}
+.etch-button svg { width: 20px; height: 20px; flex-shrink: 0; }
+.etch-icon-button { width: 36px; min-width: 36px; padding: 5px; }
+.etch-button:hover:not(:disabled) { background: var(--etch-hover, var(--etch-default-hover)); }
+.etch-layer-select[aria-pressed="true"], .etch-tool[aria-pressed="true"], .etch-sidebar-toggle[aria-expanded="true"] {
+  color: var(--etch-accent, var(--etch-default-accent));
+  background: var(--etch-active-bg, var(--etch-default-active-bg));
+}
+.etch-button:disabled { opacity: .4; cursor: default; }
+.etch:focus-visible, .etch :focus-visible { outline: 2px solid var(--etch-focus, var(--etch-default-focus)); outline-offset: -2px; }
+.etch-sidebar-toggle { margin-left: auto; flex-shrink: 0; }
+.etch-body { position: relative; isolation: isolate; display: flex; flex: 1; min-height: 0; min-width: 0; overflow: hidden; }
+.etch-viewport { position: relative; isolation: isolate; flex: 1; min-width: 0; overflow: hidden; touch-action: none; overscroll-behavior: none; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; cursor: grab; background: var(--etch-canvas, var(--etch-default-canvas)); }
+.etch-viewport:is([data-tool="pen"], [data-tool="highlighter"], [data-tool="line"], [data-tool="arrow"], [data-tool="rect"], [data-tool="ellipse"]) { cursor: crosshair; }
+.etch-viewport[data-tool="move-layer"] { cursor: move; }
+.etch-viewport[data-tool="eraser"], .etch-viewport.etch-erasing { cursor: none; }
+.etch-eraser-cursor { position: absolute; z-index: 3; left: 0; top: 0; border: 1px solid #fff; border-radius: 50%; box-shadow: 0 0 0 1px #24292f; pointer-events: none; }
+.etch-viewport:not([data-tool="hand"])[data-draw-blocked="true"] { cursor: not-allowed; }
+.etch-viewport.etch-temporary-hand { cursor: grab; }
+.etch-viewport.etch-panning, .etch-viewport.etch-moving-layer { cursor: grabbing; }
+.etch-viewport.etch-drawing .etch-empty { display: none; }
+.etch-canvas { position: absolute; inset: 0; display: block; width: 100%; height: 100%; pointer-events: none; }
+.etch-live { z-index: 1; }
+.etch-empty { position: absolute; z-index: 2; left: 50%; top: 50%; transform: translate(-50%,-50%); width: 100%; max-width: 360px; padding: 20px; text-align: center; color: var(--etch-paper-ink, #64748b); pointer-events: none; }
+.etch-empty p { margin: 8px 0 0; }
+.etch-empty-actions { display: flex; justify-content: center; flex-wrap: wrap; gap: 6px; margin-top: 14px; }
+.etch-empty-actions .etch-button { pointer-events: auto; border-color: #cbd5e1; background: #ffffffed; color: #334155; font-size: 12px; min-height: 36px; }
+.etch-viewport.etch-drop-target { outline: 2px dashed var(--etch-accent, var(--etch-default-accent)); outline-offset: -6px; }
+.etch-zoom { margin-left: 6px; font-size: 11px; font-variant-numeric: tabular-nums; color: var(--etch-muted, var(--etch-default-muted)); }
+.etch-sr-only { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.etch-sidebar {
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  flex: 0 0 auto;
+  width: min(clamp(200px, var(--etch-session-sidebar-width, var(--etch-sidebar-width, 240px)), 400px), calc(100% - 40px));
+  max-width: 100%;
+  min-height: 0;
+  min-width: 0;
+  border-left: 1px solid var(--etch-border, var(--etch-default-border));
+}
+.etch-sidebar-resize { position: absolute; z-index: 3; left: -6px; top: 0; bottom: 0; width: 12px; touch-action: none; cursor: col-resize; }
+.etch-sidebar-resize::after { content: ''; position: absolute; inset: 0 auto 0 5px; width: 2px; background: transparent; }
+.etch-sidebar-resize:hover::after, .etch-sidebar-resize:focus-visible::after { background: var(--etch-accent, var(--etch-default-accent)); }
+.etch.etch-sidebar-resizing, .etch.etch-sidebar-resizing * { cursor: col-resize !important; user-select: none; }
+/* Keep the header plus one complete coarse-pointer layer row at the 240px minimum. */
+.etch-layer-section { display: flex; flex-direction: column; flex: 0 1 auto; min-height: 130px; max-height: 50%; }
+.etch-sidebar:has(> .etch-tool-properties[hidden]) > .etch-layer-section { max-height: 100%; }
+/* The quick row reduces short-card height. Scroll the Layers header/actions too
+ * rather than letting their minimum height eliminate the properties scrollport. */
+.etch:has(> .etch-quick-toolbar:not([hidden])) .etch-layer-section { min-height: min(130px, 35%); max-height: 35%; overflow-y: auto; }
+.etch:has(> .etch-quick-toolbar:not([hidden])) .etch-layer-section:has(.etch-disclosure[aria-expanded="false"]) { min-height: 0; max-height: none; }
+.etch:has(> .etch-quick-toolbar:not([hidden])) .etch-layers { min-height: 40px; }
+.etch:has(> .etch-quick-toolbar:not([hidden])) .etch-tool-properties { max-height: 65%; }
+.etch:has(> .etch-quick-toolbar:not([hidden])) .etch-sidebar:has(.etch-layer-section .etch-disclosure[aria-expanded="false"]) > .etch-tool-properties { max-height: none; }
+.etch-sidebar-header { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; padding: 6px 8px; flex-shrink: 0; }
+.etch-sidebar-title { display: flex; align-items: center; justify-content: space-between; width: 100%; }
+.etch-sidebar-title-actions { display: flex; gap: 2px; min-width: 0; overflow-x: auto; scrollbar-width: none; }
+.etch-sidebar-title > h2, .etch-sidebar-title-actions > .etch-button { flex-shrink: 0; }
+.etch-layer-actions { display: flex; gap: 2px; max-width: 100%; }
+.etch-layer-actions .etch-button { font-size: 12px; padding-inline: 5px; }
+.etch-dialog { box-sizing: border-box; width: min(420px, calc(100vw - 24px)); max-height: calc(100svh - 24px); overflow: auto; padding: 18px; color: var(--etch-ink, var(--etch-default-ink)); background: var(--etch-panel, var(--etch-bg, var(--etch-default-panel))); border: 1px solid var(--etch-border, var(--etch-default-border)); border-radius: 8px; font: inherit; }
+.etch-dialog::backdrop { background: #0007; }
+.etch-dialog h2 { margin: 0 0 12px; font-size: 16px; }
+.etch-dialog .etch-property-field { margin-block: 10px; }
+.etch-layer-dialog, .etch-background-dialog { width: min(360px, calc(100vw - 24px)); }
+.etch-background-paints { display: flex; align-items: center; gap: 8px; }
+.etch-background-paints input { min-width: 0; height: 32px; border: 1px solid var(--etch-border, var(--etch-default-border)); border-radius: 4px; background: var(--etch-bg, var(--etch-default-bg)); color: inherit; font: inherit; }
+.etch-background-paints input[type="color"] { width: 44px; flex: 0 0 44px; padding: 2px; }
+.etch-background-paints input[type="text"] { flex: 1; width: 0; padding: 3px 6px; }
+.etch-background-preview { display: flex; align-items: center; gap: 8px; font-size: 12px; }
+.etch-background-sample { display: inline-block; width: 88px; height: 56px; flex: 0 0 88px; border: 1px solid var(--etch-border, var(--etch-default-border)); border-radius: 4px; }
+.etch-background-transparent { background: repeating-conic-gradient(#ddd 0% 25%, #fff 0% 50%) 0 / 12px 12px; }
+.etch-background-dialog .etch-button { min-height: 40px; }
+.etch-layer-stacking { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
+.etch-layer-dialog .etch-button { min-height: 40px; }
+.etch-native-warnings { padding-left: 18px; font-size: 12px; overflow-wrap: anywhere; }
+.etch-native-warnings li { margin-block: 6px; }
+.etch-native-dialog .etch-button { min-height: 40px; }
+.etch-image-preview { display: block; max-width: 100%; height: auto; margin: 0 auto; background: repeating-conic-gradient(#ddd 0% 25%, #fff 0% 50%) 0 / 16px 16px; }
+.etch-image-preview[width="0"] { display: none; }
+.etch-image-details, .etch-native-details, .etch-image-error { font-size: 12px; overflow-wrap: anywhere; }
+.etch-image-error { color: light-dark(#b42318, #ffb4ad); }
+.etch-image-error:empty { display: none; }
+.etch-image-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; }
+.etch-sidebar-heading { margin: 0; font: 600 11px/1.4 system-ui, sans-serif; text-transform: uppercase; letter-spacing: .1em; color: var(--etch-muted, var(--etch-default-muted)); }
+.etch-layers { overflow-y: auto; overflow-x: hidden; scrollbar-gutter: stable; overscroll-behavior: none; flex: 1; min-height: 0; padding: 0 6px 8px; }
+.etch-layer { display: grid; grid-template-columns: minmax(0,1fr) auto auto auto; align-items: center; gap: 2px; margin-bottom: 2px; }
+.etch-layer-delete:not(:disabled):hover { color: light-dark(#b42318, #ffb4ad); }
+.etch-layer-select { min-width: 0; text-align: left; justify-content: flex-start; gap: 8px; }
+.etch-layer-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.etch-layer-count { font-size: 11px; color: var(--etch-muted, var(--etch-default-muted)); }
+.etch-layer-indicator { width: 10px; height: 10px; flex-shrink: 0; border: 1px solid currentColor; border-radius: 50%; }
+.etch-layer-select[aria-pressed="true"] .etch-layer-indicator { background: currentColor; box-shadow: inset 0 0 0 2px var(--etch-active-bg, var(--etch-default-active-bg)); }
+.etch-tool-properties { display: flex; flex-direction: column; flex: 0 1 auto; min-height: 0; max-height: 50%; border-top: 1px solid var(--etch-border, var(--etch-default-border)); }
+.etch-tool-properties > h2 { padding: 2px 8px; flex-shrink: 0; }
+.etch-properties-content { min-height: 0; overflow: auto; overscroll-behavior: none; padding: 0 12px; }
+.etch-properties-content > :last-child { padding-bottom: 12px; }
+.etch-disclosure { padding: 0; font: inherit; letter-spacing: inherit; text-transform: inherit; justify-content: flex-start; white-space: nowrap; }
+.etch-disclosure svg { width: 12px; height: 12px; }
+.etch-disclosure[aria-expanded="false"] svg { transform: rotate(-90deg); }
+.etch-layer-section:has(.etch-disclosure[aria-expanded="false"]) { min-height: 0; flex-shrink: 0; }
+.etch-tool-properties:has(.etch-disclosure[aria-expanded="false"]) { flex-shrink: 0; }
+.etch-sidebar:has(.etch-layer-section .etch-disclosure[aria-expanded="false"]) > .etch-tool-properties { max-height: none; }
+.etch-pen-fields { display: grid; grid-template-columns: minmax(0,1fr); gap: 12px; }
+.etch-width-control { display: flex; align-items: center; gap: 8px; }
+.etch-width-control input[type="range"] { min-width: 0; width: 0; flex: 1; accent-color: var(--etch-accent, var(--etch-default-accent)); }
+.etch-width-control input[type="number"] { width: 64px; height: 32px; color: inherit; background: var(--etch-bg, var(--etch-default-bg)); border: 1px solid var(--etch-border, var(--etch-default-border)); border-radius: 4px; font: inherit; }
+.etch-stroke-preview { display: block; width: 100%; height: 80px; border: 1px solid var(--etch-border, var(--etch-default-border)); border-radius: 6px; background: var(--etch-canvas, var(--etch-default-canvas)); }
+.etch-shape-fields, .etch-shape-paints { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 10px; }
+.etch-shape-panels, .etch-shape-panel { display: contents; }
+.etch-eraser-fields { display: grid; gap: 8px; }
+.etch-shape-paints { grid-column: 1 / -1; }
+.etch-paint-toggle { display: flex; align-items: center; gap: 4px; min-height: 28px; }
+.etch-paint-toggle input { margin: 0; }
+.etch-property-field { display: flex; flex-direction: column; gap: 4px; font-size: 12px; }
+.etch-property-field > :is(input, select) { min-width: 0; height: 28px; border: 1px solid var(--etch-border, var(--etch-default-border)); border-radius: 4px; color: inherit; background: var(--etch-bg, var(--etch-default-bg)); font: inherit; }
+.etch-property-field :disabled { opacity: .5; }
+.etch-property-field.etch-shape-paint { flex-direction: row; align-items: center; justify-content: space-between; gap: 4px; }
+.etch-property-field > input[type="number"] { width: 80px; padding: 3px 6px; }
+.etch-property-field input[type="color"] { width: 44px; padding: 2px; cursor: pointer; }
+.etch-shape-paint input[type="color"] { width: 36px; flex: 0 0 36px; }
+.etch-finger { display: flex; align-items: center; gap: 6px; margin-top: 8px; font-size: 12px; }
+.etch-finger input { margin: 0; }
+.etch-move-target { margin: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 12px; }
+.etch-tool-note, .etch-image-help, .etch-layer-help { margin: 6px 0 0; color: var(--etch-muted, var(--etch-default-muted)); font-size: 11px; }
+.etch-sidebar-scrim { display: none; }
+.etch-status { display: flex; align-items: center; gap: 12px; height: 26px; margin: 0; padding: 3px 10px; flex-shrink: 0; min-width: 0; font-size: 11px; white-space: nowrap; overflow: hidden; border-top: 1px solid var(--etch-border, var(--etch-default-border)); }
+.etch-status-context { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.etch-status-message { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; color: var(--etch-muted, var(--etch-default-muted)); }
+.etch-status-metrics { display: flex; align-items: center; gap: 12px; margin-left: auto; flex-shrink: 0; font-variant-numeric: tabular-nums; }
+.etch-status[data-error="true"] .etch-status-context { display: none; }
+.etch-status[data-error="true"] .etch-status-message { color: light-dark(#b42318, #ffb4ad); }
+.etch-selection-outline { position: absolute; pointer-events: none; border: 1px dashed #526dff; box-sizing: border-box; z-index: 1; }
+.etch-selection-outline[hidden] { display: none; }
+.etch-viewport[data-tool="select"] { cursor: default; }
+.etch-selection-handle { position: absolute; width: 16px; height: 16px; transform: translate(-50%, -50%); z-index: 1; }
+.etch-selection-handle::after { content: ''; position: absolute; width: 8px; height: 8px; left: 50%; top: 50%; transform: translate(-50%, -50%); box-sizing: border-box; border: 1px solid #526dff; background: white; }
+.etch-selection-handle[hidden], .etch[aria-busy="true"] .etch-selection-handle { display: none; }
+.etch-selection-handle[data-handle="nw"], .etch-selection-handle[data-handle="se"] { cursor: nwse-resize; }
+.etch-selection-handle[data-handle="ne"], .etch-selection-handle[data-handle="sw"] { cursor: nesw-resize; }
+.etch-selection-handle[data-handle="n"], .etch-selection-handle[data-handle="s"] { cursor: ns-resize; }
+.etch-selection-handle[data-handle="e"], .etch-selection-handle[data-handle="w"] { cursor: ew-resize; }
+.etch-viewport.etch-resizing, .etch-viewport.etch-resizing .etch-selection-handle { cursor: var(--etch-resize-cursor); }
+
+/* Respond to the editor card width, not just the browser window. */
+@container (max-width: 700px) {
+  .etch-sidebar { position: absolute; z-index: 2; inset: 0 0 0 auto; box-shadow: -6px 0 20px #0002; }
+  .etch-sidebar-scrim { display: block; position: absolute; z-index: 1; inset: 0; width: 100%; height: 100%; padding: 0; border: 0; background: #0003; cursor: pointer; }
+}
+@container (max-width: 550px) {
+  .etch-zoom { display: none; }
+  .etch-status { gap: 8px; padding-inline: 6px; }
+  .etch-status-metrics { gap: 8px; }
+  .etch-status:not([data-error="true"]) .etch-status-message { position: absolute; width: 1px; height: 1px; clip-path: inset(50%); }
+  .etch-status[data-error="true"] .etch-status-metrics { display: none; }
+}
+@container (max-width: 500px) {
+  .etch-toolbar { gap: 4px; padding-inline: 4px; }
+  .etch-toolbar-scroll { gap: 6px; }
+  .etch-toolbar-group + .etch-toolbar-group { padding-left: 6px; }
+  .etch-sidebar-header { gap: 2px; padding-block: 4px; }
+  .etch-tool-properties > h2 { padding-block: 0; }
+  .etch-layer-section { min-height: 122px; }
+}
+@media (pointer: coarse) {
+  .etch-sidebar-header { gap: 2px; padding-block: 4px; }
+  .etch-tool-properties > h2 { padding-block: 0; }
+  .etch-layer-section { min-height: 122px; }
+  .etch-selection-handle { width: 24px; height: 24px; }
+  .etch-sidebar-resize { left: -10px; width: 20px; }
+  .etch-sidebar-resize::after { left: 9px; }
+  .etch-icon-button { width: 40px; min-width: 40px; min-height: 40px; }
+  .etch-layer-select { min-height: 40px; }
+}

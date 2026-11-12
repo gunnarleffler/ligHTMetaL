@@ -2,12 +2,12 @@
  *
  * Run:  NODE_PATH=$(npm root -g) node tests/smoke.js
  *
- * Starts the Flask dev server on a spare port, then loads the demo page in
+ * Starts the Node dev server on a spare port, then loads the demo page in
  * Chromium and Firefox and checks representative editor behavior. The demo
  * loads ../dist/... relative to /, which the server maps onto dist/.
  */
 
-const { spawn, spawnSync } = require("child_process");
+const { spawn } = require("child_process");
 const fs = require("fs");
 const http = require("http");
 const path = require("path");
@@ -17,8 +17,6 @@ const ROOT = path.join(__dirname, "..");
 const PORT = 5059; // dedicated, so a dev server on 5000 is left alone
 const BASE = `http://127.0.0.1:${PORT}`;
 const CONTENT = "#editor .lightmetal-content";
-
-const results = [];
 
 function httpGet(url) {
   return new Promise((resolve) => {
@@ -45,11 +43,8 @@ async function waitUntil(url, timeoutMs) {
 
 function startServer() {
   const env = { ...process.env, LM_TEST_PORT: String(PORT) };
-  const hasUv = spawnSync("uv", ["--version"], { stdio: "ignore" }).status === 0;
-  const cmd = hasUv ? "uv" : path.join(ROOT, ".venv", "bin", "python");
-  const script = path.join(ROOT, "examples", "server.py");
-  const args = hasUv ? ["run", "python", script] : [script];
-  return spawn(cmd, args, { cwd: ROOT, env, stdio: "ignore" });
+  const script = path.join(ROOT, "examples", "server.js");
+  return spawn(process.execPath, [script], { cwd: ROOT, env: { ...env, HOST: '127.0.0.1' }, stdio: ['ignore', 'ignore', 'inherit'] });
 }
 
 async function runChecks(browser, label) {
@@ -71,8 +66,8 @@ async function runChecks(browser, label) {
   check("IIFE bundle exposes init/exec", api.init === "function" && api.exec === "function");
 
   check(
-    "toolbar renders the 15 default actions plus source",
-    (await page.$$eval("#editor .lightmetal-button", (b) => b.length)) === 16
+    "toolbar renders the grouped default actions plus source",
+    (await page.$$eval("#editor .lightmetal-button", (b) => b.length)) === 20
   );
   check(
     "content is contenteditable",
@@ -110,7 +105,8 @@ async function runChecks(browser, label) {
   );
 
   // Quote wraps the selection in a blockquote.
-  await page.click('.lightmetal-actionbar button[title="Quote"]');
+  await page.getByRole('button',{name:'Paragraph style',exact:true}).click();
+  await page.getByRole('menuitemradio',{name:'Blockquote',exact:true}).click();
   check("quote wraps the selection", (await innerHTML(CONTENT)).includes("<blockquote>"));
 
   // Source mode: the toggle swaps the content for a textarea holding the
@@ -154,7 +150,8 @@ async function runChecks(browser, label) {
 
   // WYSIWYG commands must not fire from source mode.
   const htmlBeforeCmd = await innerHTML(CONTENT);
-  await page.click('.lightmetal-actionbar button[title="Bold"]');
+  check('formatting is disabled in Source mode',await page.locator('#editor .lightmetal-actionbar button[title="Bold"]').isDisabled());
+  await page.locator('#editor .lightmetal-actionbar button[title="Bold"]').evaluate(button=>button.click());
   check(
     "toolbar buttons are inert in source mode",
     (await innerHTML(CONTENT)) === htmlBeforeCmd
@@ -240,7 +237,7 @@ async function runChecks(browser, label) {
   });
   check(
     "actions without 'source' give exactly the requested buttons",
-    (await page.$$eval("#editor-nosource .lightmetal-actionbar button", (b) => b.length)) === 1
+    (await page.$$eval("#editor-nosource .lightmetal-actionbar button:not(.lightmetal-overflow-trigger)", (b) => b.length)) === 1
   );
   check(
     "actions without 'source' give no textarea",
@@ -694,20 +691,18 @@ async function runChecks(browser, label) {
   check("Ctrl+Y redoes the bold", await isBold());
   await page.evaluate(() => window.__keys.destroy());
 
-  // Image insertion via the URL prompt.
-  const dialogs = [];
-  let nextDialogAnswer = "https://example.com/pic.png";
-  page.on("dialog", (d) => {
-    dialogs.push(d.message());
-    d.accept(nextDialogAnswer);
-  });
+  // Image insertion through the URL form.
   const changesBeforeImage = await page.evaluate(() => window.changeCount);
-  await page.click('.lightmetal-actionbar button[title="Image"]');
-  check("image button opens a URL prompt", dialogs[0] === "Enter the image URL");
+  await page.click('#editor .lightmetal-actionbar button[title="Image"]');
+  const imageForm = page.locator('#editor .lightmetal-insertion-popup');
+  await imageForm.getByRole('tab',{name:'URL',exact:true}).click();
+  await imageForm.getByLabel('Image URL',{exact:true}).fill('https://example.com/pic.png');
+  await imageForm.getByLabel('Alt Text',{exact:true}).fill('picture');
+  await imageForm.getByRole('button',{name:'Insert',exact:true}).click();
   check(
     "URL image inserts at the cursor with an alt",
     (await innerHTML(CONTENT)).includes(
-      '<img src="https://example.com/pic.png" alt="image 1">'
+      '<img src="https://example.com/pic.png" alt="picture">'
     )
   );
   check(
@@ -715,19 +710,20 @@ async function runChecks(browser, label) {
     (await page.evaluate((before) => window.changeCount - before, changesBeforeImage)) === 1
   );
 
-  // Unsafe URL schemes are rejected with a toolbar note.
+  // Unsafe URL schemes are rejected without a toolbar notice.
   const htmlBeforeUnsafe = await innerHTML(CONTENT);
-  nextDialogAnswer = "javascript:alert(1)";
-  await page.click('.lightmetal-actionbar button[title="Image"]');
+  await page.click('#editor .lightmetal-actionbar button[title="Image"]');
+  await imageForm.getByRole('tab',{name:'URL',exact:true}).click();
+  await imageForm.getByLabel('Image URL',{exact:true}).fill('javascript:alert(1)');
+  check('unsafe image URL disables Insert',await imageForm.getByRole('button',{name:'Insert',exact:true}).isDisabled());
+  await page.keyboard.press('Escape');
   check(
     "javascript: URLs are not inserted",
     (await innerHTML(CONTENT)) === htmlBeforeUnsafe
   );
   check(
-    "rejection shows a toolbar note",
-    (await page.$eval("#editor .lightmetal-error", (n) => n.textContent)).includes(
-      "unsafe image URL"
-    )
+    "rejection does not add a toolbar notice",
+    (await page.locator("#editor .lightmetal-error").count()) === 0
   );
 
   // Programmatic insertion: a data URI lands in the editor (no prompt).
@@ -742,9 +738,8 @@ async function runChecks(browser, label) {
   const okUnsafe = await page.evaluate(() => window.editor.insertImage("vbscript:msgbox(1)"));
   check("insertImage rejects unsafe URL strings", okUnsafe === false);
   check(
-    "toolbar error notes are announced as status",
-    (await page.$eval("#editor .lightmetal-error", (n) => n.getAttribute("role"))) ===
-      "status"
+    "programmatic rejection does not add a toolbar notice",
+    (await page.locator("#editor .lightmetal-error").count()) === 0
   );
 
   // Programmatic images must not overwrite source edits.
@@ -892,7 +887,7 @@ async function runChecks(browser, label) {
   });
   check("pending image cannot overwrite source edits", !pendingSource.ok && pendingSource.preserved);
 
-  // A failing upload reports an error and leaves content untouched.
+  // A failing upload returns false and leaves content untouched.
   await page.evaluate(() => {
     const host = document.createElement("div");
     host.id = "editor-broken";
@@ -908,10 +903,8 @@ async function runChecks(browser, label) {
   });
   check("failed upload resolves false", okBroken === false);
   check(
-    "failed upload explains itself",
-    (await page.$eval("#editor-broken .lightmetal-error", (n) => n.textContent)).includes(
-      "upload failed"
-    )
+    "failed upload does not add a toolbar notice",
+    (await page.locator("#editor-broken .lightmetal-error").count()) === 0
   );
   check(
     "failed upload leaves content intact",
@@ -935,10 +928,8 @@ async function runChecks(browser, label) {
   });
   check("unsupported file type is rejected", okType === false);
   check(
-    "type rejection names the type",
-    (await page.$eval("#editor-limit .lightmetal-error", (n) => n.textContent)).includes(
-      "text/plain"
-    )
+    "type rejection does not add a toolbar notice",
+    (await page.locator("#editor-limit .lightmetal-error").count()) === 0
   );
   const okSize = await page.evaluate(async () => {
     const big = new File([new Uint8Array(2048)], "big.png", { type: "image/png" });
@@ -946,10 +937,8 @@ async function runChecks(browser, label) {
   });
   check("oversized image is rejected", okSize === false);
   check(
-    "size rejection mentions the limit",
-    (await page.$eval("#editor-limit .lightmetal-error", (n) => n.textContent)).includes(
-      "too large"
-    )
+    "size rejection does not add a toolbar notice",
+    (await page.locator("#editor-limit .lightmetal-error").count()) === 0
   );
   await page.evaluate(() => window.__limit.destroy());
 
@@ -969,14 +958,12 @@ async function runChecks(browser, label) {
   });
   check("handler-returned unsafe URLs are rejected", okHostile === false);
   check(
-    "hostile handler URL is flagged",
-    (await page.$eval("#editor-hostile .lightmetal-error", (n) => n.textContent)).includes(
-      "unsafe image URL"
-    )
+    "hostile handler rejection does not add a toolbar notice",
+    (await page.locator("#editor-hostile .lightmetal-error").count()) === 0
   );
   await page.evaluate(() => window.__hostile.destroy());
 
-  // With allowURL off the button opens a file picker instead of a prompt.
+  // With allowURL off the popover offers Upload only.
   await page.evaluate(() => {
     const host = document.createElement("div");
     host.id = "editor-pick";
@@ -1025,10 +1012,8 @@ async function runChecks(browser, label) {
   });
   await page.click("#editor-off .lightmetal-actionbar button[title=Image]");
   check(
-    "disabled images explain themselves",
-    (await page.$eval("#editor-off .lightmetal-error", (n) => n.textContent)).includes(
-      "disabled"
-    )
+    "disabled images do not add a toolbar notice",
+    (await page.locator("#editor-off .lightmetal-error").count()) === 0
   );
   check(
     "disabled images insert nothing",
@@ -1065,9 +1050,10 @@ async function runChecks(browser, label) {
         element: host, actions: ["bold", "image", "table", "source"], images: { allowURL: false }
       });
       host.querySelector('button[title="Image"]').click();
+      const imageUI = !!host.querySelector('input[type="file"]');
       host.querySelector('button[title="Table"]').click();
       host.querySelector('.lightmetal-table-menu [role="menuitem"]').click();
-      const lazyUI = !!host.querySelector('input[type="file"]') &&
+      const lazyUI = imageUI && !host.querySelector('input[type="file"]') &&
         host.querySelectorAll(".lightmetal-table-grid button").length === 80;
       const capturedScroll = active.some((listener) => listener.target === window &&
         listener.type === "scroll" && listener.capture);
@@ -1104,9 +1090,11 @@ async function runChecks(browser, label) {
   );
 
   await require("./editor-lifecycle")(page, check);
+  await require("./html-formatting")(page);
+  await require("./html-fullscreen")(page);
 
   if (errors.length) throw new Error("page errors: " + errors.join(" | "));
-  results.push(label + ": ok");
+  console.log(label + ": ok");
   await page.close();
 }
 
@@ -1124,11 +1112,11 @@ async function fileCheck() {
   if (global !== "object") {
     throw new Error("file:// demo exposes " + global + ", expected object");
   }
-  if (mainButtons !== 16) throw new Error("file:// demo toolbar: " + mainButtons + " buttons");
-  if (customButtons !== 5) {
+  if (mainButtons !== 20) throw new Error("file:// demo toolbar: " + mainButtons + " buttons");
+  if (customButtons !== 6) {
     throw new Error("file:// custom toolbar: " + customButtons + " buttons");
   }
-  results.push("chromium file:// demo: ok");
+  console.log("chromium file:// demo: ok");
   await page.goto("file://" + path.join(ROOT, "examples", "skins.html"));
   const gallery = await page.evaluate(() => Object.keys(window.__skinEditors));
   if (gallery.length !== 8) throw new Error("file:// skin gallery did not initialize");
@@ -1139,7 +1127,7 @@ async function fileCheck() {
   }
   await page.selectOption("#palette", "auto");
   if (errors.length) throw new Error("file:// skin gallery errors: " + errors.join(" | "));
-  results.push("chromium file:// skin gallery: ok");
+  console.log("chromium file:// skin gallery: ok");
   await page.close();
   await browser.close();
 }
@@ -1156,14 +1144,14 @@ async function fileCheck() {
       try {
         await require('./themes').runThemeChecks(launched);
         await require('./themes').runThemeChecks(launched, { minified: true });
-        results.push(label + ' independent/shared CSS themes (plain/minified): ok');
+        console.log(label + ' independent/shared CSS themes (plain/minified): ok');
         await require('./showcase').runShowcaseChecks(launched, BASE + '/');
-        results.push(label + ' four-library showcase/navigation: ok');
+        console.log(label + ' five-library showcase/navigation: ok');
         await runChecks(launched, label);
         await require("./skins").runSkinChecks(launched, BASE + "/", BASE + "/dist/");
-        results.push(label + " seven skins (plain/minified): ok");
+        console.log(label + " seven skins (plain/minified): ok");
         await require("./skins").runGalleryChecks(launched, BASE + "/");
-        results.push(label + " Flask skin gallery/navigation: ok");
+        console.log(label + " Node skin gallery/navigation: ok");
       } finally {
         await launched.close();
       }
@@ -1172,9 +1160,8 @@ async function fileCheck() {
   } finally {
     server.kill();
   }
-  console.log(results.join("\n"));
   console.log("smoke: ok");
 })().catch((e) => {
-  console.error("FAIL", e.message);
+  console.error("FAIL", e);
   process.exit(1);
 });

@@ -7,6 +7,7 @@
   <link rel="stylesheet" href="../dist/lightmetal.css">
   <link rel="stylesheet" href="../dist/maiden.css">
   <link rel="stylesheet" href="../dist/polish.css">
+  <link rel="stylesheet" href="../dist/etch.css">
   <link rel="stylesheet" href="../examples/showcase.css">
 </head>
 <body>
@@ -18,30 +19,31 @@
     </div>
     <img class="logo" src="../ligHTMetaL.png" alt="ligHTMetaL logo" width="640">
     <p class="pitch"><strong>Write. Render. Add a little poliSH.</strong>
-      Write rich HTML, edit Markdown without hiding its source, or turn Markdown into HTML.
-      Four independent JavaScript libraries, including code highlighting. Zero runtime dependencies.
+      Edit Markdown beside a live preview, write rich HTML, or turn Markdown into HTML.
+      Five independent JavaScript libraries, including code highlighting and sketching. Zero runtime dependencies.
       No accounts, tracking, or cloud required.</p>
   </header>
   <div class="tabs" role="tablist" aria-label="Examples">
-    <button class="tab" role="tab" id="tab-html" aria-controls="panel-html" aria-selected="true" type="button">HTML Editor</button>
-    <button class="tab" role="tab" id="tab-markdown" aria-controls="panel-markdown" aria-selected="false" tabindex="-1" type="button">Markdown Editor</button>
+    <button class="tab" role="tab" id="tab-markdown" aria-controls="panel-markdown" aria-selected="true" type="button">Markdown Editor</button>
+    <button class="tab" role="tab" id="tab-html" aria-controls="panel-html" aria-selected="false" tabindex="-1" type="button">HTML Editor</button>
     <button class="tab" role="tab" id="tab-parser" aria-controls="panel-parser" aria-selected="false" tabindex="-1" type="button">Markdown Parser</button>
     <button class="tab" role="tab" id="tab-polish" aria-controls="panel-polish" aria-selected="false" tabindex="-1" type="button">Syntax Highlighter</button>
+    <button class="tab" role="tab" id="tab-etch" aria-controls="panel-etch" aria-selected="false" tabindex="-1" type="button">Sketch Editor</button>
     <button class="tab" role="tab" id="tab-readme" aria-controls="panel-readme" aria-selected="false" tabindex="-1" type="button">README.md</button>
   </div>
-  <section role="tabpanel" id="panel-html" aria-labelledby="tab-html">
-    <h2>lig<span class="cap">H</span><span class="cap">T</span><span class="cap">M</span>eta<span class="cap">L</span> — the HTML editor</h2>
-    <p>Rich-text editing with images, tables, HTML source, and the browser's native undo. A small toolbar, ready for your application.</p>
-    <div class="actions"><a href="html.html">Details &amp; quickstart →</a><a href="skins.html">Explore HTML editor skins</a></div>
-    <div id="html-editor" class="lightmetal"></div>
-    <h3>HTML output</h3><pre data-code-language="html" id="html-output" class="output" tabindex="0" aria-label="HTML editor output"></pre>
-  </section>
-  <section role="tabpanel" id="panel-markdown" aria-labelledby="tab-markdown" hidden>
+  <section role="tabpanel" id="panel-markdown" aria-labelledby="tab-markdown">
     <h2>lig<span class="cap">H</span><span class="cap">T</span><span class="cap">M</span>eta<span class="cap">L</span>::<span class="cap">M</span>ai<span class="cap">D</span><span class="cap">E</span>n — the lightMarkDown Editor</h2>
-    <p>Styled source that keeps your Markdown visible. Format text, edit tables, and switch between source, preview, and side-by-side views.</p>
-    <div class="actions"><a href="markdown.html">Details &amp; quickstart →</a><a href="markdown-skins.html">Explore Markdown editor skins</a></div>
+    <p>Styled source beside a live preview. Format text, edit tables, and switch views without losing your Markdown.</p>
+    <div class="actions"><a href="markdown.html">Details &amp; quickstart →</a><a href="markdown-skins.html">Explore Markdown editor skins</a><a href="../examples/frameworks/react.html">React example</a><a href="../examples/frameworks/vue.html">Vue example</a></div>
     <div id="made-editor" class="lightmetal"></div>
     <h3>Markdown output</h3><pre data-code-language="markdown" id="markdown-output" class="output" tabindex="0" aria-label="Markdown editor output"></pre>
+  </section>
+  <section role="tabpanel" id="panel-html" aria-labelledby="tab-html" hidden>
+    <h2>lig<span class="cap">H</span><span class="cap">T</span><span class="cap">M</span>eta<span class="cap">L</span> — the HTML editor</h2>
+    <p>Rich-text editing with images, tables, HTML source, and the browser's native undo. A small toolbar, ready for your application.</p>
+    <div class="actions"><a href="html.html">Details &amp; quickstart →</a><a href="skins.html">Explore HTML editor skins</a><a href="../examples/frameworks/react.html">React example</a><a href="../examples/frameworks/vue.html">Vue example</a></div>
+    <div id="html-editor" class="lightmetal"></div>
+    <h3>HTML output</h3><pre data-code-language="html" id="html-output" class="output" tabindex="0" aria-label="HTML editor output"></pre>
   </section>
   <section role="tabpanel" id="panel-parser" aria-labelledby="tab-parser" hidden>
     <h2>lig<span class="cap">H</span><span class="cap">T</span><span class="cap">M</span>eta<span class="cap">L</span>::<span class="cap">M</span>elt<span class="cap">D</span>own — the Markdown parser</h2>
@@ -84,6 +86,17 @@ console.log(message);</textarea>
     <p id="polish-ansi-status" role="status">Loading ANSI art…</p>
     <pre id="polish-ansi-art" class="code ansi-art" role="img" aria-label="ANSI art rendered as colored text" tabindex="0" hidden><code></code></pre>
   </section>
+  <section role="tabpanel" id="panel-etch" aria-labelledby="tab-etch" hidden>
+    <h2>lig<span class="cap">H</span><span class="cap">T</span><span class="cap">M</span>eta<span class="cap">L</span>::<span class="cap">E</span>tch — Leave your mark.</h2>
+    <p>Draw layered sketches with Pen, Highlighter, shapes, selection and erasing.
+      Import images or supported SVG vectors; export native JSON, PNG or SVG.
+      No storage backend, uploads or shared editor runtime.</p>
+    <div class="actions"><a href="etch/index.html">Open the sketch editor →</a></div>
+    <div id="sketch-editor" style="height:520px"></div>
+    <p>Pick a tool and leave your mark. Your drawing stays here when you switch tabs;
+      refreshing the page clears it. Use Export to keep a PNG or SVG.</p>
+    <p>Etch is an unreleased addition. Real-device and assistive-technology checks remain unverified.</p>
+  </section>
   <section role="tabpanel" id="panel-readme" aria-labelledby="tab-readme" hidden>
     <h2>README.md, rendered by <span class="cap">M</span>elt<span class="cap">D</span>own and poli<span class="cap">S</span><span class="cap">H</span></h2>
     <p>The actual <a id="readme-source" href="../README.md" download>README.md</a>, parsed locally with highlighted code examples.
@@ -117,9 +130,12 @@ console.log(message);</textarea>
 <script src="../dist/MeltDown.js"></script>
 <script src="../dist/maiden.js"></script>
 <script src="../dist/polish.js"></script>
+<script src="../dist/etch.js"></script>
 <script src="../examples/code-blocks.js"></script>
 <script src="../examples/polish-demo.js"></script>
 <script src="../examples/polish-playground.js"></script>
+<script src="../examples/markdown-samples.js"></script>
+<script src="../examples/markdown-demo.js"></script>
 <script src="../examples/showcase.js"></script>
 </body>
 </html>

@@ -12,10 +12,10 @@ async function toolbarGroupChecks(browser, base, name) {
     const markdown = page.locator('#editor .lightmetal-actionbar');
     const html = page.locator('#html-groups .lightmetal-actionbar');
     assert.equal(await markdown.getByRole('separator').count(), 6);
-    assert.equal(await html.getByRole('separator').count(), 5);
+    assert.equal(await html.locator('.lightmetal-group-start').count(), 7);
     const order = bar => bar.locator(':scope > *').evaluateAll(nodes => nodes.filter(node => node.tagName === 'BUTTON' || node.getAttribute('role') === 'separator').map(node => node.getAttribute('role') === 'separator' ? '|' : node.getAttribute('aria-label')));
     assert.deepEqual(await order(markdown), ['Bold','Italic','Strike-through','|','Heading 1','Heading 2','Paragraph','|','Quote','Unordered List','Ordered List','|','Inline Code','Code Block','|','Horizontal Line','Link','Image','Table','|','Undo','Redo','|','Fullscreen','Help']);
-    assert.deepEqual(await order(html), ['Bold','Italic','Underline','Strike-through','|','Heading 1','Heading 2','Paragraph','|','Quote','Ordered List','Unordered List','|','Code','|','Horizontal Line','Link','Table','Image','|','Source']);
+    assert.deepEqual(await order(html), ['Insert','Paragraph style','Bold','Italic','Underline','Strike-through','Text options','Text alignment','Lists','Table','Link','Image','Code','Fullscreen','Source','More','Undo','Redo']);
     for (const bar of [markdown, html]) {
       for (const separator of await bar.getByRole('separator').all()) {
         assert.equal(await separator.getAttribute('aria-orientation'), 'vertical');
@@ -29,10 +29,10 @@ async function toolbarGroupChecks(browser, base, name) {
     await markdown.evaluate(bar => { for (const button of bar.querySelectorAll('button')) button.hidden = false; });
     await page.waitForFunction(() => document.querySelectorAll('#editor .lightmetal-toolbar-separator:not([hidden])').length === 6);
     await page.addStyleTag({ content: `
-      .lightmetal-actionbar > button:is([aria-label="Bold"], [aria-label="Italic"], [aria-label="Underline"], [aria-label="Strike-through"]) { display: var(--test-format-display, inline-flex); }
-      .lightmetal-actionbar.test-hide-formatting > button:is([aria-label="Bold"], [aria-label="Italic"], [aria-label="Underline"], [aria-label="Strike-through"]) { display: none; }
+      .lightmetal-actionbar > button:is([aria-label="Bold"], [aria-label="Italic"], [aria-label="Underline"], [aria-label="Strike-through"], [aria-label="Superscript / Subscript"], [aria-label="Font and colors"], [aria-label="Formatting"]) { display: var(--test-format-display, inline-flex); }
+      .lightmetal-actionbar.test-hide-formatting > button:is([aria-label="Bold"], [aria-label="Italic"], [aria-label="Underline"], [aria-label="Strike-through"], [aria-label="Superscript / Subscript"], [aria-label="Font and colors"], [aria-label="Formatting"]) { display: none; }
     ` });
-    for (const [bar, count] of [[markdown, 6], [html, 5]]) {
+    for (const [bar, count] of [[markdown, 6]]) {
       for (const mode of ['class', 'style']) {
         const firstDividerHidden = await bar.evaluate(async (bar, mode) => {
           if (mode === 'class') bar.classList.add('test-hide-formatting');
@@ -57,8 +57,12 @@ async function toolbarGroupChecks(browser, base, name) {
       await page.setViewportSize({ width: 390, height: 700 });
       for (const bar of [markdown, html]) {
         assert.equal(await bar.evaluate(node => getComputedStyle(node).flexWrap), 'nowrap');
-        assert.equal(await bar.evaluate(node => getComputedStyle(node).overflowX), 'auto');
-        assert.ok(await bar.evaluate(node => node.scrollWidth > node.clientWidth));
+        const isHTML = bar === html;
+        assert.equal(await bar.evaluate(node => getComputedStyle(node).overflowX), isHTML ? 'hidden' : 'auto');
+        await page.waitForFunction(isHTML => {
+          const node = document.querySelector(isHTML ? '#html-groups .lightmetal-actionbar' : '#editor .lightmetal-actionbar');
+          return isHTML ? node.scrollWidth <= node.clientWidth : node.scrollWidth > node.clientWidth;
+        },isHTML);
         const positions = await bar.locator('button').evaluateAll(nodes => nodes.map(node => node.getBoundingClientRect().top));
         assert.ok(Math.max(...positions) - Math.min(...positions) < 2, 'controls stay on one scrollable row');
       }
@@ -68,11 +72,11 @@ async function toolbarGroupChecks(browser, base, name) {
       __markdownEditor.destroy(); __htmlGroups.destroy();
       for (const bar of retired) {
         for (const button of bar.querySelectorAll('button')) {
-          if (['Bold', 'Italic', 'Underline', 'Strike-through'].includes(button.getAttribute('aria-label'))) button.hidden = true;
+          if (['Bold', 'Italic', 'Underline', 'Strike-through', 'Superscript / Subscript', 'Font and colors', 'Formatting'].includes(button.getAttribute('aria-label'))) button.hidden = true;
         }
       }
       await Promise.resolve();
-      const hidden = retired.map(bar => bar.querySelector('[role="separator"]').hidden);
+      const hidden = retired.map(bar => bar.querySelector('[role="separator"]')?.hidden ?? false);
       window.__markdownEditor = __initMarkdown({ element: document.getElementById('editor'), actions: ['bold','heading1','image'] });
       window.__htmlGroups = lightmetal.init({ element: document.getElementById('html-groups'), actions: ['bold','heading1','image'] });
       return hidden;
@@ -81,7 +85,7 @@ async function toolbarGroupChecks(browser, base, name) {
     assert.equal(await markdown.getByRole('separator').count(), 0, 'explicit action lists stay unchanged');
     assert.equal(await html.getByRole('separator').count(), 0);
     await page.evaluate(() => { __markdownEditor.destroy(); __htmlGroups.destroy(); });
-    console.log(name + ': HTML/MaiDEn default grouping, muted accessible separators, hidden/disabled controls, exact custom lists, all skins and narrow horizontal scrolling: ok');
+    console.log(name + ': HTML/MaiDEn default grouping, muted accessible separators, hidden/disabled controls, exact custom lists, all skins, Markdown scrolling and HTML overflow: ok');
   } finally { await page.close(); }
 }
 module.exports = { toolbarGroupChecks };

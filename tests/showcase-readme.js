@@ -1,5 +1,6 @@
 const assert = require('node:assert/strict');
 const path = require('node:path');
+const { withPage } = require('./browser-checks');
 const readme = require('node:fs').readFileSync(path.join(__dirname, '../README.md'), 'utf8');
 const fences = [...readme.matchAll(/^```([^\r\n]*)\r?$/gm)].map(match => match[1]);
 const languages = fences.filter((_, index) => index % 2 === 0);
@@ -7,29 +8,37 @@ assert.equal(fences.length % 2, 0, 'README fences are paired');
 assert.ok(languages.every(language => ['html', 'js', 'javascript', 'bash', 'css'].includes(language)), 'every README fence has an explicit language');
 assert.ok(fences.filter((_, index) => index % 2 === 1).every(language => language === ''), 'closing fences remain untagged');
 
-module.exports = async function readmeChecks(browser, base) {
-  const page = await browser.newPage();
-  const errors = [], requests = [];
-  page.on('pageerror', error => errors.push(error.message));
+function readmeUI(page) {
+  const requests = [];
   page.on('request', request => requests.push(request.url()));
   const tab = page.getByRole('tab', { name: 'README.md', exact: true });
   const frame = page.frameLocator('#readme-preview');
   const reload = page.getByRole('button', { name: 'Reload README', exact: true });
   const status = page.locator('#readme-status');
   const readmeRequests = () => requests.filter(url => new URL(url).pathname.endsWith('/README.md')).length;
-  async function theme(mode) {
-    await frame.locator('.polish.theme-' + mode).waitFor({ state: 'visible' });
-    assert.equal(await frame.locator('html').evaluate(node => getComputedStyle(node).colorScheme), mode);
-  }
-  try {
-    await page.emulateMedia({ colorScheme: 'light' });
-    for (const prefix of [base, base + 'examples/', 'file://' + path.join(__dirname, '../examples/')]) {
+  return { tab, frame, reload, status, requests, readmeRequests };
+}
+
+async function theme(frame, mode) {
+  await frame.locator('.polish.theme-' + mode).waitFor({ state: 'visible' });
+  assert.equal(await frame.locator('html').evaluate(node => getComputedStyle(node).colorScheme), mode);
+}
+
+module.exports = async function readmeChecks(browser, base) {
+  for (const prefix of [base, base + 'examples/', 'file://' + path.join(__dirname, '../examples/')]) {
+    await withPage(browser, 'README gallery ' + prefix, async page => {
+      const { tab, frame, reload, status, readmeRequests } = readmeUI(page);
+      await page.emulateMedia({ colorScheme: 'light' });
       await page.goto(prefix + 'index.html');
-      assert.deepEqual(await page.locator('[role="tabpanel"] > h2').evaluateAll(headings => headings.map(heading => {
-        const accent = getComputedStyle(document.querySelector('h1 .cap')).color;
+      const accents = await page.locator('[role="tabpanel"] > h2').evaluateAll(headings => Object.fromEntries(headings.map(heading => {
+        const accent = getComputedStyle(document.querySelector('.page-head h1 .cap')).color;
         const caps = [...heading.querySelectorAll('.cap')];
-        return { letters: caps.map(span => span.textContent).join(''), colored: caps.every(span => getComputedStyle(span).color === accent) };
-      })), ['HTML', 'HTMLMDE', 'HTMLMD', 'HTMLSH', 'MDSH'].map(letters => ({ letters, colored: true })));
+        return [heading.parentElement.id, { letters: caps.map(span => span.textContent).join(''), colored: caps.every(span => getComputedStyle(span).color === accent) }];
+      })));
+      assert.deepEqual(accents, Object.fromEntries(Object.entries({
+        'panel-html': 'HTML', 'panel-markdown': 'HTMLMDE', 'panel-parser': 'HTMLMD',
+        'panel-polish': 'HTMLSH', 'panel-etch': 'HTMLE', 'panel-readme': 'MDSH'
+      }).map(([id, letters]) => [id, { letters, colored: true }])));
       assert.equal(await page.locator('[role="tabpanel"] .cap:not(h2 .cap)').count(), 0, 'only tab titles get accent spans');
       const before = readmeRequests();
       assert.equal(await page.locator('#readme-preview').isHidden(), true);
@@ -43,7 +52,7 @@ module.exports = async function readmeChecks(browser, base) {
         assert.match(await status.textContent(), /local demo server/);
         assert.equal(await page.locator('#readme-preview').isHidden(), true);
         assert.equal(readmeRequests(), before, 'file pages explain blocked AJAX without attempting a request');
-        continue;
+        return;
       }
       await frame.getByRole('heading', { name: 'ligHTMetaL', exact: true }).waitFor();
       await frame.getByRole('heading', { name: 'Quickstart: CDN', exact: true, level: 2 }).waitFor();
@@ -75,15 +84,15 @@ module.exports = async function readmeChecks(browser, base) {
       assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
       assert.equal(await frame.locator('html').evaluate(node => node.scrollWidth <= innerWidth), true);
       await page.setViewportSize({ width: 1280, height: 720 });
-      await theme('light');
+      await theme(frame, 'light');
       for (const mode of ['dark', 'light', 'auto']) {
         await page.locator('#theme-toggle').click();
-        await theme(mode === 'auto' ? 'light' : mode);
+        await theme(frame, mode === 'auto' ? 'light' : mode);
       }
       await page.emulateMedia({ colorScheme: 'dark' });
-      await theme('dark');
+      await theme(frame, 'dark');
       await page.emulateMedia({ colorScheme: 'light' });
-      await theme('light');
+      await theme(frame, 'light');
       assert.equal(readmeRequests() - before, prefix.startsWith('file:') ? 0 : 1, 'README loads once, only when requested');
       await page.getByRole('tab', { name: 'HTML Editor', exact: true }).click();
       await tab.click();
@@ -95,7 +104,10 @@ module.exports = async function readmeChecks(browser, base) {
         await page.waitForFunction(() => document.getElementById('readme-status').textContent === 'Loaded README.md.');
         assert.equal(readmeRequests() - before, 2, 'reload fetches the live README again');
       }
-    }
+    });
+  }
+  await withPage(browser, 'README fetch recovery and sandbox safety', async page => {
+    const { tab, frame, reload, requests } = readmeUI(page);
     let attempts = 0;
     let markdown = '# Updated README\n\n```js\nconst short = true;\n```\n\n```javascript\nconst full = false;\n```';
     await page.route('**/README.md', route => {
@@ -133,6 +145,5 @@ module.exports = async function readmeChecks(browser, base) {
     const parserFrame = page.frameLocator('#parser-preview');
     await parserFrame.locator('body').filter({ hasText: '<p id="parser-raw-proof">' }).waitFor();
     assert.equal(await parserFrame.locator('#parser-raw-proof').count(), 0, 'other parser/editor rendering keeps raw HTML escaped');
-    assert.deepEqual(errors, []);
-  } finally { await page.close(); }
+  });
 };

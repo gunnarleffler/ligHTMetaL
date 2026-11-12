@@ -7,24 +7,11 @@
 Detailed API, styling, integration, and testing guidance. Start with the
 [README](../README.md) for installation and quickstarts.
 
-Two editors. A parser. A syntax highlighter. Your content. Vanilla JavaScript and CSS. Zero runtime dependencies.
+The core libraries are independent vanilla JavaScript/CSS with no runtime
+dependencies. Examples below start with the HTML editor; later sections cover
+MaiDEn, Etch, and poliSH. See the [MeltDown guide](MeltDown.md) for the parser.
 
-- **ligHTMetaL** edits rich HTML, with images, tables, and source mode.
-- **ligHTMetaL::MaiDEn** edits styled Markdown source, with preview and split views.
-- **ligHTMetaL::MeltDown** turns Markdown into HTML in browsers and Node.js.
-- **ligHTMetaL::poliSH** highlights code in 49 languages, with eleven color themes.
-
-Use each library on its own, or combine MaiDEn, MeltDown, and poliSH for a complete Markdown workflow.
-The examples below start with the HTML editor.
-
-**Version scope:** This README covers the 0.6.0 line.
-The 0.4.0 package includes only the HTML editor and skins.
-
-- Format text, headings, lists, quotes, and links.
-- Insert images from URLs, files, clipboard, or drag and drop.
-- Create tables and edit rows and columns.
-- Edit HTML source, customize the toolbar, and choose light or dark themes.
-- Keep the browser's native undo and redo.
+**Version scope:** This reference covers **lightmetal 0.7.0**.
 
 **Your content belongs to you.** Data sovereignty is a permanent design
 constraint. No accounts, telemetry, analytics, vendor cloud, or automatic
@@ -39,6 +26,7 @@ for offline use. Unfiltered HTML can also load resources or execute code; see
 
 - [Use without a build](#use-without-a-build)
 - [Use with npm](#use-with-npm)
+- [React and Vue adapters](frameworks.md)
 - [Content and API](#content-and-api)
 - [Toolbar](#toolbar)
 - [Images](#images)
@@ -150,7 +138,7 @@ the next entry path.
 | --- | --- | --- |
 | `element` | Required | Host element; add `class="lightmetal"` for the built-in styles. |
 | `onChange(html)` | None | Receive content updates. Persistence is up to your application. |
-| `actions` | All built-ins | Ordered toolbar action names or objects. |
+| `actions` | Grouped defaults | Ordered toolbar action names or objects. |
 | `defaultParagraphSeparator` | `"div"` | Use `"div"` or `"p"` for new paragraphs. |
 | `styleWithCSS` | `false` | Ask native formatting commands to use CSS styles. |
 | `classes` | Built-in names | Override generated class names; supply matching CSS. |
@@ -170,10 +158,54 @@ const editor = lightmetal.init({
 });
 ```
 
-The built-ins are `bold`, `italic`, `underline`, `strikethrough`, `heading1`,
-`heading2`, `paragraph`, `quote`, `olist`, `ulist`, `code`, `line`, `link`,
-`table`, `image`, and `source`. Omit `actions` to show all; use `[]` for no
-main toolbar buttons.
+The built-ins are `insert`, `blocks`, `text`, `lists`, `more`,
+`bold`, `italic`, `underline`, `strikethrough`, `headings`,
+`heading1`, `heading2`, `paragraph`, `quote`, `olist`, `ulist`, `code`, `line`,
+`link`, `table`, `image`, `script`, `font`, `formatting`, `indentation`,
+`alignment`, `undo`, `redo`, `fullscreen`, and `source`. Omit `actions` for the grouped defaults;
+use `[]` for no main toolbar buttons. Explicit arrays keep their order and contents.
+
+The default toolbar starts with **Insert** (horizontal rule and a
+small local emoji palette), **Paragraph style** (`blocks`: Paragraph, H1–H6,
+Blockquote), and direct Bold/Italic/Underline/Strike-through buttons. **Text options**
+(`text`) combines local fonts, sizes, colors, and superscript/subscript. Alignment
+and Lists use menus. Table, Link, Image, Code block (`code`), Fullscreen, and Source
+stay direct when space permits. **More** holds Formatting and Indentation menus,
+plus controls displaced by the available toolbar width. Undo/Redo remain direct
+when they fit. Emoji insertion uses native Unicode text editing, not remote assets.
+
+Menus open even without an editor caret. Choosing a command then uses the end of
+that editor's content; opening or cancelling alone does not edit it. Source mode
+disables editing commands. Link and Image open compact forms described below.
+
+Explicit arrays retain their command order and membership and also receive
+automatic overflow. No grouping or default editing actions are added to them.
+The overflow trigger stays available even when every command must move into it.
+Existing `headings` (H1–H6), `script`, `font`, `formatting`, and `indentation` menus
+remain available in custom arrays. Explicit `heading1` and `heading2` actions still
+apply those levels directly. Other compact controls:
+
+- **Superscript / Subscript** (`script`): toggle raised or lowered text.
+- **Text alignment** (`alignment`): left, center, right, or justified.
+- **Indentation** (`indentation`): indent or outdent.
+- **Formatting** (`formatting`): remove inline formatting or unlink.
+- **Font and colors** (`font`): choose a local font family or a native size from
+  1–7; choose a text/highlight color and click its Apply button. Each choice runs
+  one native editing command, not a multi-property batch. Fonts are not downloaded;
+  availability and exact sizes depend on the browser and operating system.
+- **Undo / Redo**: direct buttons using document-wide native history availability.
+
+Menus preserve the writing selection. Arrow keys and Home/End move through
+choices; Enter/Space applies one; Escape closes and returns to the trigger.
+Font fields use normal form keyboard navigation. Source mode and composition
+prevent these commands. Replacing or editing content invalidates pending choices.
+
+These controls do not broaden import permissions. Normal `setHTML()` and rich
+paste still strip styles and unsupported tags, including native `<font>` markup.
+Some font, color, and CSS-based alignment/indent formatting can therefore be lost
+on filtered reimport. Export returns browser-generated HTML as before. Applications
+that preserve trusted formatting must choose and enforce their own sanitization
+policy; do not enable raw/unrestricted modes for untrusted content.
 
 Mix names with objects to customize a built-in or add an action:
 
@@ -199,16 +231,71 @@ only use trusted configuration.
 `exec(command, value = null)` wraps native `document.execCommand`. Use it for
 custom editing commands to keep native undo/redo.
 
+### Links
+
+**Link** opens Insert Link, or Edit Link when both ends of the selection are inside
+the same existing link. The form has URL, Display Text, and Open in new tab fields.
+It uses the existing URL policy, including the explicit unrestricted-mode bypass.
+Enter submits a valid form; Escape or Cancel closes it without editing.
+
+Display Text starts with the selected or linked text. Leaving it unchanged keeps
+inline formatting. Changing it replaces only the selected or linked contents with
+plain text. At a caret, an empty Display Text uses the URL. New-tab links get
+`target="_blank"` and `rel="noopener noreferrer"`; existing unrelated attributes
+and rel tokens survive edits. This form does not sanitize existing link markup.
+
+Save replaces only the existing link through native editing. Remove Link uses
+native Unlink, retaining its children and formatting. Each successful operation
+notifies `onChange` through native input and supports native Undo/Redo in the tested
+Chromium/Firefox builds. Browsers may normalize serialized markup or boundary
+spaces, including converting spaces to NBSP during link replacement. No custom
+history or DOM normalization repairs are added.
+
+Forms save their selection and close if content changes, is replaced, enters
+composition/Source mode, or is destroyed. A deleted link cannot redirect Save
+or Remove to unrelated content. Menus can open without a caret; choosing a command
+then uses an end-of-editor position. Overflowed controls anchor their forms to More.
+
+### HTML Fullscreen
+
+The default **Fullscreen** button (`fullscreen`) expands the HTML editor to its
+editing document's viewport. Browser controls stay visible; no native fullscreen
+permission is needed. Click again or press Escape to exit. Menus and the table
+picker receive Escape first; composition stays native.
+
+Fullscreen works in visual and Source modes. It retains the editing nodes,
+selection, current content, and native history without firing `onChange`. Exit
+restores the embedded layout and the saved editor/page scroll offsets. Destroying
+the editor also releases the layout and page scroll lock. Only one HTML editor
+per document expands at a time. Explicit `actions` arrays must include
+`"fullscreen"` to show the button; custom action callbacks still override it.
+
+A whole editor inside an iframe fills that frame, not its parent. Keep the host
+outside clipping, transformed, or containment-styled ancestors when it needs to
+cover the page. Keep the editor's normal structural layout: replacing it with a
+custom flex/grid/positioning scheme can change native browser history behavior.
+The implementation keeps the HTML editor positioned in normal flow and translates
+it to the viewport, rather than rebuilding Firefox's textarea frame. No custom
+history stack or browser-specific workaround is used.
+
+Run `npm run test:html:fullscreen` after building for focused Chromium/Firefox
+checks. These also run within the regular browser smoke suite.
+
+### HTML Source
+
 Click **Source** to edit HTML and click again to return to visual mode. Changes
-in both modes reach `onChange`. Source edits are not sanitized. Text remains
+in both modes reach `onChange`. Fullscreen remains available in Source mode;
+formatting commands stay inactive. Source edits are not sanitized. Text remains
 exact in the textarea, but browsers may normalize HTML when returning to visual
 mode. Omit `"source"` from `actions` to leave out this button.
 
 ## Images
 
-The **Image** button prompts for a URL. Files can also be pasted, dropped, or
-inserted from code. Files stay in the document as base64 unless you supply an
-upload hook:
+The **Image** button opens a popover with **Upload** and **URL** tabs.
+Upload offers file browsing and drag/drop; URL accepts an image URL and optional
+Alt Text. `allowURL: false` hides the URL tab. No Select tab or image-provider API
+is implemented yet. Files can still be pasted, dropped into content, or inserted
+from code. Files stay in the document as base64 unless you supply an upload hook:
 
 ```js
 await editor.insertImage("/images/photo.png");
@@ -216,8 +303,12 @@ const file = document.querySelector("input[type=file]").files[0];
 if (file) await editor.insertImage(file);
 ```
 
-Insertion resolves to `true` on success or `false` on failure; rejected images
-show a toolbar note. JPEG, PNG, GIF, and WebP are supported, with a default
+Insertion resolves to `true` on success or `false` on failure. Rejected actions
+do not show toolbar error notices. The image popover shows validation/upload errors
+locally. It saves the insertion range across asynchronous processing; cancellation,
+content edits/replacement, Source mode, composition, or teardown discard late
+results rather than inserting elsewhere. Cancel and Escape remain available during
+processing. Successful insertion returns focus to the writing field. JPEG, PNG, GIF, and WebP are supported, with a default
 2 MiB file limit. Missing MIME types fall back to the filename extension.
 These checks do not authenticate file contents.
 
@@ -226,7 +317,7 @@ Pass these settings under `images`:
 | Option | Default | Purpose |
 | --- | --- | --- |
 | `enabled` | `true` | Enable image APIs and file insertion. |
-| `allowURL` | `true` | Show a URL prompt; `false` opens a file picker instead. |
+| `allowURL` | `true` | Show the image popover's URL tab; `false` leaves Upload only. |
 | `allowBase64` | `true` | Allow base64 insertion and base64 sources in sanitized imports. |
 | `dragDrop` | `true` | Handle dropped files. |
 | `paste` | `true` | Handle clipboard image files. |
@@ -356,16 +447,17 @@ Toolbar icons use `currentColor` to follow the theme.
 
 ### Toolbar grouping
 
-Both editors organize their default controls into groups with quiet vertical
-separators. The HTML editor keeps Underline and Source in their existing order;
-MaiDEn groups its formatting, structure, blocks, code, insertion, history, and
-view controls. Help follows the views without an extra divider. Missing or hidden groups leave no stray separators. Disabled
-controls remain visible in their group. Narrow toolbars scroll horizontally rather
-than wrapping buttons onto extra rows.
+Both text editors organize their default controls into groups with quiet vertical
+separators. The HTML editor uses the refreshed layout described above, with larger
+36px buttons, 20px icons, and width-based overflow. Coarse-pointer controls grow
+to 44px. All seven skins retain their colors and surface treatments.
+MaiDEn keeps its existing grouping and horizontal scrolling; its refresh comes
+later. Neither toolbar wraps onto extra rows. Disabled controls remain available
+in their group or overflow, but cannot run commands.
 
 Explicit `actions` arrays stay application-owned: their order and contents are
 unchanged, with no automatic separators. MaiDEn still supports manual `"|"` entries.
-Grouping works across all skins; it adds no actions or shortcuts.
+Grouping works across all skins and adds no shortcuts.
 
 ### Optional skins
 
@@ -397,9 +489,9 @@ from `src/skins/` into `dist/skins/`. Each skin supports the same system,
 can coexist on one page. Skins add no JavaScript, frameworks, fonts, or external
 requests; they use the editor's existing icons.
 
-Substantial keeps the default's rounded, flat style with a 47px toolbar, 32px
-button hit areas, 20px icons and slightly stronger borders. Its MaiDEn footer is
-about 29px high. It works with HTML Source and MaiDEn source, preview, split and
+Substantial keeps a rounded, flat style with 20px icons and slightly stronger
+borders. MaiDEn retains its 47px toolbar, 32px buttons, and roughly 29px footer.
+The HTML refresh uses the shared 36px buttons (44px for coarse pointers). It works with HTML Source and MaiDEn source, preview, split and
 fullscreen modes. Load `dist/skins/substantial.css` (or `.min.css`) and add
 `lightmetal-substantial`; no extra configuration is needed.
 
@@ -484,6 +576,31 @@ Plain and minified standalone/CSS builds are available. Filename casing matters.
 The main package entry point remains the HTML editor. MaiDEn is the display name;
 `maiden` is used in filenames and the browser global.
 
+### Optional live code colors
+
+Pass `sourceHighlight: highlighter.highlightTokens`
+to `maiden.init()` to color fenced and inline code while editing. Load `polish.css`
+alongside the editor styles. No preview renderer is required. MaiDEn still imports
+no highlighter and does not look for a global automatically.
+
+The hook is synchronous: `sourceHighlight(code, language)` returns
+`{ tokens, diagnostics }`. Tokens must partition the original UTF-16 string with
+ordered, contiguous `{ start, end, kind }` ranges. Supported kinds are `plain`,
+`comment`, `keyword`, `string`, `number`, `boolean`, `constant`, `function`, `type`,
+`variable`, `property`, `operator`, `punctuation`, `tag`, and `attribute`.
+MaiDEn reads no HTML or styles from the result. Errors and invalid results leave
+that snippet in its normal code styling. Keep the hook free of editing side effects.
+
+Explicit fence labels take priority. Unlabeled fences and inline code pass an
+empty language to poliSH's guesser. Unknown labels and explicit `plain`/`text`
+stay plain. Short snippets may not provide enough evidence for a guess. Indented
+code blocks keep their existing source styling.
+
+MaiDEn highlights whole fences to retain multiline language context. It caches
+unchanged snippets, paints colors only, and waits until composition ends before
+repainting. It never rewrites the editable text or adds a separate Undo stack.
+ANSI controls stay source text, not terminal styling.
+
 ### Help and optional rendered preview
 
 The default Help button (`guide`) opens a local quick-start dialog. Escape or Close
@@ -525,10 +642,25 @@ results after replacement, exit, or destroy are ignored. View changes do not cal
 
 Keep raw HTML escaping enabled in your renderer (MeltDown's default). The editor also rebuilds output through
 a restricted formatting allowlist. It removes scripts, embeds, handlers, styles,
-and unsafe links. Images become text placeholders; task checkboxes become text
-symbols. Code-highlighting classes named `hljs`, `hljs-*`, and `language-*` survive.
+and unsafe links. Images load by default from HTTP(S) URLs, including relative
+URLs that resolve to HTTP(S), valid base64 PNG/JPEG/GIF/WebP data URLs, and
+`blob:` URLs whose parsed origin matches the editor document's non-opaque origin.
+Images preserve `src`, `alt`, and `title`, positive integer `width`/`height` within
+the HTML unsigned-long range, `loading="lazy|eager"`, and
+`decoding="async|sync|auto"`. Preview sets `referrerpolicy="no-referrer"`.
+Other schemes, cross-origin/opaque blob URLs, SVG data URLs, handlers, `srcset`,
+and image styles are blocked. Rejected images become text placeholders; task
+checkboxes become text symbols. Remote images can still make tracking requests;
+URL checks do not verify image bytes. Use application CSP for origin restrictions.
+The same policy applies in Preview and Side-by-side, even with renderer raw HTML
+enabled. Code-highlighting classes named `hljs`, `hljs-*`, and `language-*` survive.
 Load your highlighter's CSS. poliSH's fixed `token` category classes also survive. For publishing, render the source through
 your parser and sanitize untrusted output with a maintained HTML sanitizer.
+
+Applications can keep stable attachment URLs such as `/f/…` in source and substitute
+browser-only blob URLs in renderer output. Preview does not rewrite saved source
+or own those blobs. Revoke object URLs and clear displayed private images on lock
+or teardown; revoking alone may leave an already-decoded image visible.
 
 No third-party parser or syntax-highlighter dependency is required. The examples
 use MeltDown with poliSH; applications can supply another renderer/highlighter
@@ -699,7 +831,16 @@ enabled toolbar control.
 List controls use recognized items, including their continuation lines, and keep
 nested content and quote containers in place. Quote adds/removes one recognized
 level. Optional `checklist` adds/removes task markers; `task-toggle` checks/unchecks
-existing tasks. Enter continues lists, tasks, and quotes; new tasks start unchecked,
+existing tasks. A plain primary click on a recognized
+`[ ]`, `[x]`, or `[X]` source marker toggles that task, even without task toolbar
+buttons. Each click changes only the character inside the brackets, with one
+native Undo step and one change notification. The editor restores an existing
+owned caret or selection, including its direction. Click text beside a marker to
+place the caret there. Drags, modified clicks and composition do not toggle tasks.
+Literal task-looking text stays text. Source clicks also work in split view;
+the rendered HTML side and Preview remain read-only.
+
+Enter continues lists, tasks, and quotes; new tasks start unchecked,
 and empty marker lines exit their innermost level. Shift+Enter inserts a plain
 newline. Literal contexts and composition stay native for these commands.
 
@@ -757,6 +898,27 @@ Linux WebKit can share undo across frames; the current Playwright Firefox runtim
 also has native parent/child focus and input-routing limitations. Frame history
 is not a cross-browser isolation guarantee, and the frame is not a security sandbox.
 
+## Etch — sketch editing
+
+Etch is the suite's independent sketch editor. Its scripts and styles do not
+require the HTML editor, MaiDEn, MeltDown, or poliSH. Load `dist/etch.css` and
+`dist/etch.js`, then call `etch.createEtch(container)`. Give the container an
+explicit height. Minified and native ESM builds are also available.
+Etch assets are included in lightmetal 0.7.0.
+
+Etch owns transactional drawing Undo rather than browser-native text history.
+Applications own persistence through `save()`, `load()`, and change events.
+It provides layered Pen/Highlighter/shapes, selection, erasing, raster/native/
+restricted SVG import, and native JSON/PNG/SVG export. Imports enforce resource
+and content limits; unsupported SVG is rejected rather than silently rasterized.
+No uploads or storage service are included. See the [Etch guide](Etch.md) for the
+API, trust boundaries and limits. V1 acceptance and real-device/accessibility
+validation remain incomplete.
+
+Run `npm run test:etch` for units and `npm run test:etch:browser` for Chromium/
+Firefox. `BROWSERS=chromium` selects one engine. These checks are part of
+`npm test`; `npm run test:package` also exercises packaged Etch builds.
+
 ## poliSH — syntax highlighting
 
 poliSH highlights code, configuration, Markdown source, and ANSI-colored text
@@ -785,6 +947,7 @@ Connect the existing MeltDown hook to add code colors to MaiDEn:
 const highlighter = polish.createHighlighter({ languages: polish.allLanguages });
 const editor = maiden.init({
   element: document.getElementById('markdown'),
+  sourceHighlight: highlighter.highlightTokens, // Optional live code colors.
   preview: {
     render: source => meltDown.parse(source, { highlight: highlighter.highlight })
   }
@@ -793,8 +956,9 @@ editor.element.querySelector('.lightmarkdown-preview')
   .classList.add('polish', 'theme-dark');
 ```
 
-Load each library separately. Highlighting affects rendered code blocks, not the
-editable Markdown source. Syntax classes survive MaiDEn's preview filtering;
+Load each library separately, plus `polish.css`. The `sourceHighlight` hook colors
+editable fenced and inline code. The MeltDown hook colors rendered code blocks.
+Syntax classes survive MaiDEn's preview filtering;
 ANSI inline styles remain filtered. Standalone poliSH supports ANSI colors.
 
 See the [poliSH guide](poliSH.md) for the API, language catalog, themes,
@@ -812,28 +976,34 @@ Browser-generated HTML can differ.
 ## Development and tests
 
 The browser library has no dependencies. Building uses Node.js/npm, Bash, and
-esbuild; the optional demo server uses Python 3.14+, uv, and Flask:
+esbuild. The optional demo server uses Node's built-in modules:
 
 ```bash
 npm install
-uv sync --frozen
 npm run build
-uv run python examples/server.py
+npm run dev
 ```
 
-Open `http://localhost:5000/`, or open `examples/index.html` directly with the
-tracked bundles. The landing page showcases the HTML editor, MaiDEn, MeltDown, and poliSH.
-Each has a detail page with live demos and quickstarts: `examples/html.html`,
-`examples/markdown.html`, `examples/meltdown.html`, and `examples/polish.html`. Compare editor skins in
+Open `http://localhost:5000/`, or use this computer's network address from another
+device. The server binds to `0.0.0.0` by default. Use `PORT=5001 npm run dev` to
+change ports or `HOST=127.0.0.1 npm run dev` to restrict access to this computer. It serves existing bundles, not an automatic rebuild or browser reload.
+Run `npm run build` after source changes. In tmux, run `npm run dev` in a pane
+and leave it running. Completed requests log their time, method, path, status,
+and duration; query strings are omitted.
+
+You can also open `examples/index.html` directly with the
+tracked bundles. The landing page showcases all five libraries. Detail pages are
+`examples/html.html`, `examples/markdown.html`, `examples/meltdown.html`,
+`examples/polish.html`, and `examples/etch/index.html`. Compare editor skins in
 `examples/skins.html` and `examples/markdown-skins.html`.
-The **README.md** tab loads this file through MeltDown and highlights its fenced
-examples with poliSH. It renders this trusted file's HTML and local logo inside a
+The **README.md** tab loads the repository README through MeltDown and highlights
+its fenced examples with poliSH. It renders that trusted HTML and local logo inside a
 sandbox. Use the demo server to load it, then Reload README after edits; local-file
 AJAX is blocked by browsers. Tab headings color the library names' intentional
 capitals; document text stays unchanged.
 The HTML detail page also has custom-hook and raw-mode examples. Its custom hook
-returns a local data URI; it uploads nothing. Python/Flask are not needed to use
-any library in your application.
+returns a local data URI; it uploads nothing. Neither the server nor Node.js is
+needed to use the prebuilt libraries in your application.
 
 Tests use a global Playwright installation and its Chromium/Firefox browsers:
 
@@ -846,7 +1016,11 @@ npm run test:package
 
 `npm test` rebuilds bundles, runs parser/highlighter tests and browser/security checks in both browsers, and
 checks the standalone demo over `file://` in Chromium. After building,
-`npm run test:security` runs just security regressions. `npm run test:package`
+`npm run test:security` runs just security regressions. `npm run test:html:toolbar`
+checks the refreshed HTML menus, emoji/native Undo, no-caret opening, narrow
+overflow, displaced Table insertion, custom callbacks, and teardown.
+`npm run test:html:insertions` checks Link insert/edit/remove and native history,
+Image URL/upload/drop, validation, saved selections, and async cancellation. `npm run test:package`
 packs and installs the package with scripts disabled, then checks standalone,
 minified, ESM, and bundled use. It publishes nothing. Keep rebuilt `dist/` files
 with source changes.
@@ -858,6 +1032,17 @@ repeats across the extra DOM shapes and mobile width. Use
 widths and all three DOM shapes. Both modes report elapsed times. No fixture
 cases are removed from the default run. Inline and whole-editor iframe checks
 include editing, native undo/redo, Preview, and Side-by-side.
+For focused live-color checks, run `npm run test:markdown -- --source-highlight`.
+It covers source colors, caching, wrapping/caret alignment, composition, native
+Undo/Redo, build formats, and related painter, preview and demo smoke checks.
+Use `npm run test:markdown -- --task-click` for source checkbox clicks, selection
+restoration, native history, literal/gesture guards, skins, iframe use and related
+writing/preview/demo checks.
+
+`npm run test:frameworks` checks the optional React/Vue adapter files in lightmetal,
+including script-free package installation, native Undo, parent updates, refs,
+Strict Mode, SSR hydration, cleanup, and local demos. See the
+[framework guide](frameworks.md). Core runtime dependencies stay unchanged.
 
 `npm run test:markdown:native-frame` runs separate browser-only cross-document
 focus/input diagnostics with no editor library. It is not part of `npm test` and
@@ -865,4 +1050,4 @@ can fail on a browser/runtime limitation even when in-document editor checks pas
 
 ## License
 
-MIT. See [LICENSE](LICENSE). Inspired by [Pell](https://github.com/jaredreich/pell).
+MIT. See [LICENSE](../LICENSE).

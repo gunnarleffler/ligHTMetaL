@@ -1,29 +1,49 @@
 {
   "name": "lightmetal",
-  "version": "0.6.0",
-  "description": "ligHTMetaL: local-first HTML and Markdown editors, a Markdown parser, and syntax highlighting. Zero runtime dependencies.",
+  "version": "0.7.0",
+  "description": "ligHTMetaL: local-first HTML and Markdown editors, a Markdown parser, syntax highlighting, and a sketch editor. Zero runtime dependencies.",
   "main": "dist/lightmetal.js",
   "module": "dist/lightmetal.esm.js",
   "files": [
     "dist",
     "src",
+    "adapters",
     "ligHTMetaL.png",
     "README.md",
     "CHANGELOG.md",
     "docs/reference.md",
+    "docs/frameworks.md",
     "docs/MeltDown.md",
     "docs/poliSH.md",
+    "docs/Etch.md",
+    "docs/etch-maintenance.md",
+    "docs/etch-security-review.md",
+    "docs/etch-future-work.md",
+    "docs/etch-verification.md",
+    "docs/etch-svg-fallback-audit.md",
+    "docs/specs/etch-spec.md",
     "docs/specs/polish-spec.md"
   ],
   "scripts": {
     "build": "bash build/build.sh",
-    "test": "npm run build && NODE_PATH=$(npm root -g) node tests/smoke.js && npm run test:meltdown && npm run test:polish && npm run test:polish:browser && npm run test:markdown && npm run test:security",
+    "build:framework-examples": "node build/framework-examples.mjs",
+    "dev": "node examples/server.js",
+    "test:server": "node --test tests/server.test.js",
+    "test:html:formatting": "NODE_PATH=$(npm root -g) node tests/html-formatting.js",
+    "test:html:fullscreen": "NODE_PATH=$(npm root -g) node tests/html-fullscreen.js",
+    "test:html:toolbar": "NODE_PATH=$(npm root -g) node tests/html-toolbar-refresh.js",
+    "test:html:insertions": "NODE_PATH=$(npm root -g) node tests/html-insertion-popovers.js",
+    "test": "npm run test:release-docs && npm run build && npm run test:server && NODE_PATH=$(npm root -g) node tests/smoke.js && npm run test:html:toolbar && npm run test:html:insertions && npm run test:meltdown && npm run test:polish && npm run test:polish:browser && npm run test:etch && npm run test:etch:browser && npm run test:markdown && npm run test:frameworks && npm run test:security",
     "test:meltdown": "node --test tests/meltdown/*.test.js",
     "test:polish": "node --test tests/polish/*.test.js && node tests/polish-meltdown.mjs src/MeltDown.js",
     "test:polish:browser": "NODE_PATH=$(npm root -g) node --test tests/polish-browser.mjs",
+    "test:etch": "node --test tests/etch/test/*.test.js",
+    "test:etch:browser": "NODE_PATH=$(npm root -g) node tests/etch-browser.js",
     "test:markdown": "NODE_PATH=$(npm root -g) node tests/markdown.js",
     "test:markdown:native-frame": "NODE_PATH=$(npm root -g) node tests/native-frame-focus.js",
+    "test:release-docs": "node --test tests/release-docs.test.js && node tests/release-docs.js",
     "test:package": "NODE_PATH=$(npm root -g) node tests/package-smoke.js",
+    "test:frameworks": "NODE_PATH=$(npm root -g) node tests/framework-adapters.js",
     "test:security": "NODE_PATH=$(npm root -g) node tests/security-review.js"
   },
   "keywords": [
@@ -33,11 +53,21 @@
     "markdown",
     "parser",
     "syntax-highlighting",
-    "local-first",
-    "pell"
+    "local-first"
   ],
   "license": "MIT",
+  "peerDependencies": {
+    "react": "^18.3.1 || ^19.0.0",
+    "vue": "^3.5.0"
+  },
+  "peerDependenciesMeta": {
+    "react": { "optional": true },
+    "vue": { "optional": true }
+  },
   "devDependencies": {
-    "esbuild": "^0.28.2"
+    "esbuild": "^0.28.2",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "vue": "^3.5.45"
   }
 }

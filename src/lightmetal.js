@@ -5,7 +5,8 @@
  * See LICENSE.
  */
 
-import { groupToolbar } from './toolbar-groups.js';
+import { createToolbarOverflow } from './html-toolbar-overflow.js';
+import { formattingActions, createFormattingControls } from './html-formatting.js';
 
 const FORMAT_BLOCK = "formatBlock";
 const PARAGRAPH_SEPARATOR = "defaultParagraphSeparator";
@@ -131,6 +132,8 @@ const defaultActions = {
   }
 };
 
+Object.assign(defaultActions, formattingActions);
+
 const defaultClasses = {
   actionbar: "lightmetal-actionbar",
   button: "lightmetal-button",
@@ -177,17 +180,19 @@ const IMAGE_EXT_TYPES = {
 
 /**
  * Map the requested actions to action definitions. `requested` is a list of
- * action names or objects; when omitted, every built-in action (including
- * the image and source toggles) is used.
+ * action names or objects; when omitted, the grouped default toolbar is used.
+ * Individual heading1/heading2 actions remain available in explicit arrays.
  */
-const resolveActions = (requested, sourceAction) => {
+const resolveActions = (requested, sourceAction, fullscreenAction) => {
   if (!requested) {
-    return [...Object.values(defaultActions), sourceAction].filter(Boolean);
+    return ['insert','blocks','bold','italic','underline','strikethrough','text',
+      'alignment','lists','table','link','image'].map(name => defaultActions[name])
+      .concat(defaultActions.code, fullscreenAction, sourceAction, defaultActions.formatting, defaultActions.indentation, defaultActions.undo, defaultActions.redo).filter(Boolean);
   }
   if (!Array.isArray(requested)) throw new TypeError("actions must be an array.");
   return requested.map((action) => {
     if (typeof action === "string") {
-      const definition = action === "source" ? sourceAction : defaultActions[action];
+      const definition = action === "source" ? sourceAction : action === "fullscreen" ? fullscreenAction : defaultActions[action];
       if (!definition) throw new TypeError(`Unknown toolbar action: ${action}`);
       return definition;
     }
@@ -195,6 +200,7 @@ const resolveActions = (requested, sourceAction) => {
     if (action.name === "source" && sourceAction) {
       return { ...sourceAction, ...action };
     }
+    if (action.name === "fullscreen") return { ...fullscreenAction, ...action };
     if (defaultActions[action.name]) {
       return { ...defaultActions[action.name], ...action };
     }
@@ -342,16 +348,9 @@ const sanitizeHTML = (html, base, allowBase64) => {
   return root.innerHTML;
 };
 
-/**
- * Build an <img> tag with safely escaped attributes.
- */
-const buildImgTag = (url, alt) => {
-  const esc = (value) => String(value).replace(/&/g, "&amp;").replace(/"/g, "&quot;");
-  return `<img src="${esc(url)}" alt="${esc(alt)}">`;
-};
-
 // Count for alt text so stacked images stay distinguishable.
 let imageCounter = 0;
+const fullscreenOwners = new WeakMap();
 
 /**
  * Create an editor inside settings.element.
@@ -413,9 +412,33 @@ export const init = (settings) => {
   // "wysiwyg" or "source".
   let mode = "wysiwyg";
   let destroyed = false;
-  let errorTimer = 0;
+  let fullscreen = null, composing = false;
+  const fullscreenButtons = [];
   let formatTimer = 0;
-  let pickerInput = null;
+  let insertionUI = null;
+  const insertionObserver = new MutationObserver(() => closeInsertion());
+  const insertionCleanups = [];
+  const listenInsertion = (target,type,handler) => {
+    target.addEventListener(type,handler);
+    insertionCleanups.push(() => target.removeEventListener(type,handler));
+  };
+  function closeInsertion(restoreFocus = false) {
+    const state = insertionUI;
+    insertionUI = null;
+    const changed = insertionObserver.takeRecords().length;
+    insertionObserver.disconnect();
+    insertionCleanups.splice(0).forEach(cleanup => cleanup());
+    if (!state) return;
+    if (state.popup.hasAttribute('popover') && state.popup.matches(':popover-open')) state.popup.hidePopover();
+    state.popup.remove();
+    state.trigger.setAttribute('aria-expanded','false');
+    if (restoreFocus) {
+      if (!changed && !destroyed && mode !== 'source' && content.contains(state.range.commonAncestorContainer)) {
+        const selection = document.getSelection(); selection.removeAllRanges(); selection.addRange(state.range.cloneRange());
+      }
+      (state.trigger.closest('.lightmetal-overflow') ? overflow.trigger : state.trigger).focus();
+    }
+  }
   let tableDropdown = null;
   let tableMenu = null, tableInsertItem = null;
   const tableMenuButtons = new Map();
@@ -425,12 +448,18 @@ export const init = (settings) => {
   let resetTableDropdown = null;
 
   const sourceAction = {
-    icon: SVG_MARKUP.source,
+    icon: SVG_MARKUP.code,
     title: "Source",
     state: () => mode === "source",
     result: () => (mode === "source" ? exitSource() : enterSource())
   };
-  const resolvedActions = resolveActions(settings.actions, sourceAction);
+  const fullscreenAction = {
+    name: 'fullscreen', title: 'Fullscreen',
+    icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H3v5m13-5h5v5M3 16v5h5m13-5v5h-5"/></svg>',
+    state: () => !!fullscreen,
+    result: toggleFullscreen
+  };
+  const resolvedActions = resolveActions(settings.actions, sourceAction, fullscreenAction);
   resolvedActions.forEach((action, index) => {
     const workflow = action && (action.name === "image" || action.name === "table") && !action.result;
     if (!action || (typeof action.result !== "function" && !workflow)) {
@@ -441,6 +470,7 @@ export const init = (settings) => {
     }
   });
 
+  const ownsHTMLClass = !element.classList.contains('lightmetal-html');
   const cleanups = [];
   const listen = (target, type, handler, options = false) => {
     target.addEventListener(type, handler, options);
@@ -462,38 +492,31 @@ export const init = (settings) => {
   const content = document.createElement("div");
   content.contentEditable = "true";
   content.className = classes.content;
+  content.classList.add('lightmetal-fullscreen-surface');
   content.setAttribute("role", "textbox");
   content.setAttribute("aria-label", "HTML content");
   content.setAttribute("aria-multiline", "true");
 
   const source = document.createElement("textarea");
   source.className = classes.source;
+  source.classList.add('lightmetal-fullscreen-surface');
   source.setAttribute("aria-label", "HTML source");
   source.spellcheck = false;
   source.hidden = true;
 
-  // Error messages appear as an inline note in the toolbar and fade away.
-  const showError = (message) => {
-    if (destroyed) return;
-    actionbar.querySelectorAll(`.${classes.error}`).forEach((n) => n.remove());
-    const node = document.createElement("div");
-    node.className = classes.error;
-    node.setAttribute("role", "status");
-    node.textContent = message;
-    actionbar.appendChild(node);
-    clearTimeout(errorTimer);
-    errorTimer = setTimeout(() => node.remove(), 6000);
-  };
-
   const enterSource = () => {
+    closeInsertion();
     clearTimeout(formatTimer);
-    closeTableMenu(); closeTableDropdown();
+    closeTableMenu(); closeTableDropdown(); formatting.close();
     mode = "source";
+    for (const {button,name} of toolbarButtons) if (!['source','fullscreen'].includes(name)) button.disabled = true;
+    formatting.refresh();
     source.value = content.innerHTML;
     content.hidden = true;
     source.hidden = false;
     source.focus();
     updateTableControls();
+    updateFullscreenLayout();
   };
 
   const exitSource = () => {
@@ -501,10 +524,105 @@ export const init = (settings) => {
     source.hidden = true;
     content.hidden = false;
     mode = "wysiwyg";
+    for (const {button} of toolbarButtons) button.disabled = false;
+    formatting.refresh();
     updateTableControls();
+    updateFullscreenLayout();
     if (settings.onChange) settings.onChange(content.innerHTML);
     return true;
   };
+
+  // Fullscreen changes layout only. Keep the editing nodes and native history.
+  const fullscreenProperties = ['--lightmetal-fullscreen-writing-height','--lightmetal-fullscreen-x','--lightmetal-fullscreen-y'];
+  function setFullscreenProperty(name,value) {
+    if (element.style.getPropertyValue(name) !== value) element.style.setProperty(name,value);
+    fullscreen.values[name] = value;
+  }
+  const fullscreenResize = typeof ResizeObserver === 'function' ? new ResizeObserver(() => updateFullscreenLayout()) : null;
+  function updateFullscreenLayout() {
+    if (!fullscreen) return;
+    const field = mode === 'source' ? source : content;
+    const style = window.getComputedStyle(element);
+    const rect = element.getBoundingClientRect();
+    const height = Math.max(0,rect.bottom - parseFloat(style.borderBottomWidth || 0) -
+      parseFloat(style.paddingBottom || 0) - field.getBoundingClientRect().top);
+    fullscreen.translateX -= rect.left; fullscreen.translateY -= rect.top;
+    setFullscreenProperty(fullscreenProperties[0],`${height}px`);
+    setFullscreenProperty(fullscreenProperties[1],`${fullscreen.translateX}px`);
+    setFullscreenProperty(fullscreenProperties[2],`${fullscreen.translateY}px`);
+  }
+  function updateFullscreenButtons() {
+    for (const button of fullscreenButtons) {
+      button.classList.toggle(classes.selected, !!fullscreen);
+      button.setAttribute('aria-pressed', String(!!fullscreen));
+    }
+  }
+  function writingSelection() {
+    if (mode === 'source') return {start:source.selectionStart,end:source.selectionEnd,direction:source.selectionDirection};
+    const selection = document.getSelection();
+    if (!selection?.rangeCount || !content.contains(selection.anchorNode) || !content.contains(selection.focusNode)) return null;
+    return {anchor:selection.anchorNode,anchorOffset:selection.anchorOffset,focus:selection.focusNode,focusOffset:selection.focusOffset};
+  }
+  function focusWriting(selection) {
+    const sourceMode = mode === 'source', field = sourceMode ? source : content;
+    if (document.activeElement !== field) field.focus({preventScroll:true});
+    if (destroyed || sourceMode !== (mode === 'source')) return;
+    if (sourceMode && selection) source.setSelectionRange(selection.start,selection.end,selection.direction);
+    else if (selection && content.contains(selection.anchor) && content.contains(selection.focus)) {
+      document.getSelection().setBaseAndExtent(selection.anchor,selection.anchorOffset,selection.focus,selection.focusOffset);
+    }
+  }
+  function exitFullscreen(focus = true) {
+    if (!fullscreen) return false;
+    const state = fullscreen, selection = writingSelection();
+    // Restore focus before layout changes; focusing during Firefox frame
+    // reconstruction can discard native textarea history.
+    if (!destroyed && focus) focusWriting(selection);
+    if (fullscreen !== state) return true;
+    fullscreen = null;
+    fullscreenResize?.disconnect();
+    for (const [node,name,owned] of state.classes) if (owned) node.classList.remove(name);
+    for (const [name,value,priority] of state.styles) {
+      if (element.style.getPropertyValue(name) !== state.values[name]) continue;
+      if (value) element.style.setProperty(name,value,priority);
+      else element.style.removeProperty(name);
+    }
+    if (!state.hadStyleAttribute && !element.style.length) element.removeAttribute('style');
+    if (fullscreenOwners.get(document) === exitFullscreen) fullscreenOwners.delete(document);
+    content.scrollTop = state.contentTop; content.scrollLeft = state.contentLeft;
+    source.scrollTop = state.sourceTop; source.scrollLeft = state.sourceLeft;
+    actionbar.scrollLeft = state.toolbarLeft;
+    window.scrollTo(state.x,state.y);
+    updateFullscreenButtons();
+    return true;
+  }
+  function toggleFullscreen() {
+    if (destroyed || composing || !element.isConnected) return false;
+    closeInsertion();
+    closeTableMenu(); closeTableDropdown(); formatting.close();
+    if (fullscreen) return exitFullscreen();
+    fullscreenOwners.get(document)?.(false);
+    const selection = writingSelection();
+    fullscreen = {
+      contentTop:content.scrollTop,contentLeft:content.scrollLeft,
+      sourceTop:source.scrollTop,sourceLeft:source.scrollLeft,toolbarLeft:actionbar.scrollLeft,
+      x:window.scrollX,y:window.scrollY,
+      hadStyleAttribute:element.hasAttribute('style'),
+      styles:fullscreenProperties.map(name => [name,element.style.getPropertyValue(name),element.style.getPropertyPriority(name)]),
+      values:{},translateX:0,translateY:0,
+      classes:[[element,'lightmetal-fullscreen'],[document.documentElement,'lightmetal-page-fullscreen']]
+        .map(([node,name]) => [node,name,!node.classList.contains(name)])
+    };
+    focusWriting(selection);
+    if (destroyed || !fullscreen) return false;
+    fullscreenOwners.set(document,exitFullscreen);
+    setFullscreenProperty(fullscreenProperties[1],'0px'); setFullscreenProperty(fullscreenProperties[2],'0px');
+    for (const [node,name] of fullscreen.classes) node.classList.add(name);
+    updateFullscreenLayout();
+    for (const node of [element,actionbar,tablebar]) fullscreenResize?.observe(node);
+    updateFullscreenButtons();
+    return true;
+  }
 
   // ---- Images ------------------------------------------------------------
 
@@ -518,15 +636,7 @@ export const init = (settings) => {
     return null;
   };
 
-  const linkResult = () => {
-    const url = window.prompt("Enter the link URL");
-    if (!url) return false;
-    if (!unrestricted && !allowLinkURL(url, baseURI, true)) {
-      showError("Refusing to insert an unsafe link URL");
-      return false;
-    }
-    return exec("createLink", url.trim());
-  };
+  const linkResult = button => openInsertion('link',button);
 
   // Make sure the caret is inside the editor before inserting, so
   // programmatic insertion lands at a predictable spot (the caret if the
@@ -545,7 +655,6 @@ export const init = (settings) => {
 
   const tableError = (message) => {
     if (tableDropdown && !tableDropdown.hidden) tableMessage.textContent = message;
-    else showError(message);
     return false;
   };
 
@@ -555,12 +664,13 @@ export const init = (settings) => {
     tableRange = range && content.contains(range.commonAncestorContainer) ? range.cloneRange() : null;
   };
 
+  const tableAnchor = () => tableTrigger?.closest('.lightmetal-overflow') ? element.querySelector('.lightmetal-overflow-trigger') : tableTrigger;
   const closeTableMenu = (restoreFocus = false) => {
     if (!tableMenu || tableMenu.hidden) return;
     if (tableMenu.hasAttribute("popover") && tableMenu.matches(":popover-open")) tableMenu.hidePopover();
     tableMenu.hidden = true;
     tableTrigger?.setAttribute("aria-expanded", "false");
-    if (restoreFocus && !destroyed) tableTrigger?.focus();
+    if (restoreFocus && !destroyed) tableAnchor()?.focus();
   };
 
   const closeTableDropdown = (restoreFocus = false) => {
@@ -569,7 +679,7 @@ export const init = (settings) => {
       tableDropdown.hidden = true;
       tableInsertItem?.setAttribute("aria-expanded", "false");
       tableTrigger?.setAttribute("aria-expanded", "false");
-      if (restoreFocus) tableTrigger?.focus();
+      if (restoreFocus) tableAnchor()?.focus();
     }
     tableRange = null;
   };
@@ -627,7 +737,7 @@ export const init = (settings) => {
     if (!tableDropdown || tableDropdown.hidden) return;
     tableDropdown.style.maxWidth = `${Math.max(0, window.innerWidth - 16)}px`;
     tableDropdown.style.maxHeight = `${Math.max(0, window.innerHeight - 16)}px`;
-    const anchor = tableTrigger.getBoundingClientRect();
+    const anchor = tableAnchor().getBoundingClientRect();
     const popup = tableDropdown.getBoundingClientRect();
     const left = Math.max(8, Math.min(anchor.left, window.innerWidth - popup.width - 8));
     const below = anchor.bottom + 4;
@@ -751,25 +861,25 @@ export const init = (settings) => {
     } else {
       ensureCaret();
     }
-    const ok = exec("insertHTML", buildImgTag(url, alt || `image ${++imageCounter}`));
+    const image = document.createElement('img');
+    image.setAttribute('src',url);
+    image.setAttribute('alt',alt ?? `image ${++imageCounter}`);
+    const ok = exec("insertHTML", image.outerHTML);
     if (!ok) return false;
     content.focus();
     return true;
   };
 
   // Validate, convert (or upload via the custom handler), then insert.
-  // Never throws; problems surface as the toolbar note and return false.
-  const handleFile = async (file) => {
+  // Never throws; rejected images return false without changing content.
+  const handleFile = async (file, context = null) => {
     if (mode === "source" || destroyed) return false;
-    if (!images.enabled) {
-      showError("Images are disabled");
-      return false;
-    }
+    if (!images.enabled) return false;
     const selection = document.getSelection();
     const range = selection && selection.rangeCount ? selection.getRangeAt(0) : null;
-    const savedRange = range && content.contains(range.commonAncestorContainer)
+    const savedRange = context?.range || (range && content.contains(range.commonAncestorContainer)
       ? range.cloneRange()
-      : null;
+      : null);
     try {
       if (!file) throw new Error("No image received");
 
@@ -812,65 +922,191 @@ export const init = (settings) => {
         );
       }
 
-      if (mode === "source" || destroyed) return false;
+      if (mode === "source" || destroyed || context && !context.valid()) return false;
       const urlError = imageURLError(url);
       if (urlError) throw new Error(urlError);
 
       const width = await imageWidth(url);
+      if (context && !context.valid()) return false;
       return placeImage(url, width ? `image (${width}px)` : "image", savedRange);
-    } catch (err) {
-      showError(err instanceof Error ? err.message : String(err));
+    } catch (error) {
+      if (context?.valid()) context.error(error.message || 'Image insertion failed');
       return false;
     }
   };
 
   const insertImageURL = (url) => {
     if (mode === "source" || destroyed) return false;
-    if (!images.enabled) {
-      showError("Images are disabled");
-      return false;
-    }
+    if (!images.enabled) return false;
     const trimmed = url.trim();
     const urlError = imageURLError(trimmed);
-    if (urlError) {
-      showError(urlError);
-      return false;
-    }
+    if (urlError) return false;
     return placeImage(trimmed);
   };
 
-  // The image action: URL prompt, or the file picker when allowURL is off.
-  const imagePrompt = () => {
-    const url = window.prompt("Enter the image URL");
-    return url ? insertImageURL(url) : false;
-  };
+  function positionInsertion() {
+    if (!insertionUI) return;
+    const {popup,trigger} = insertionUI;
+    const anchor = (trigger.closest('.lightmetal-overflow') ? overflow.trigger : trigger).getBoundingClientRect();
+    popup.style.maxWidth = `${Math.max(0,window.innerWidth-16)}px`;
+    popup.style.maxHeight = `${Math.max(0,window.innerHeight-16)}px`;
+    const box = popup.getBoundingClientRect();
+    popup.style.left = `${Math.max(8,Math.min(anchor.left,window.innerWidth-box.width-8))}px`;
+    popup.style.top = `${Math.max(8,Math.min(anchor.bottom+4,window.innerHeight-box.height-8))}px`;
+  }
 
-  const imagePicker = () => {
-    if (!pickerInput) {
-      pickerInput = document.createElement("input");
-      pickerInput.type = "file";
-      pickerInput.accept = unrestricted ? "" : IMAGE_TYPES.join(",");
-      pickerInput.style.display = "none";
-      listen(pickerInput, "change", () => {
-        const file = pickerInput.files && pickerInput.files[0];
-        pickerInput.value = ""; // allow reselecting the same file
-        if (file) handleFile(file);
+  function openInsertion(kind,trigger) {
+    if (destroyed || composing || mode === 'source' || !trigger) return false;
+    if (insertionUI?.trigger === trigger) { closeInsertion(true); return false; }
+    closeInsertion(); formatting.close(); closeTableMenu(); closeTableDropdown(); overflow.close();
+    const selection = document.getSelection();
+    let range = selection?.rangeCount ? selection.getRangeAt(0) : null;
+    if (!range || !content.contains(range.commonAncestorContainer)) {
+      range = document.createRange(); range.selectNodeContents(content); range.collapse(false);
+    }
+    range = range.cloneRange();
+    const anchorAt = node => (node.nodeType === Node.ELEMENT_NODE ? node : node.parentElement)?.closest('a');
+    const candidate = anchorAt(range.startContainer);
+    const link = kind === 'link' && candidate && candidate === anchorAt(range.endContainer) && content.contains(candidate) ? candidate : null;
+    const popup = document.createElement('form');
+    popup.className = 'lightmetal-table-dropdown lightmetal-insertion-popup';
+    popup.id = `lightmetal-insertion-${++tableDropdownCounter}`;
+    popup.setAttribute('role','dialog'); popup.setAttribute('aria-label',kind === 'image' ? 'Insert Image' : link ? 'Edit Link' : 'Insert Link');
+    if (typeof popup.showPopover === 'function') popup.setAttribute('popover','manual');
+    const state = {popup,trigger,range,link,busy:false}; insertionUI = state;
+    const valid = () => {
+      if (insertionUI !== state || destroyed || composing || state.formComposing || mode === 'source') return false;
+      if (insertionObserver.takeRecords().length || !content.contains(range.commonAncestorContainer) || link && !content.contains(link)) {
+        closeInsertion(); return false;
+      }
+      return true;
+    };
+    const error = document.createElement('p'); error.className = 'lightmetal-insertion-error'; error.setAttribute('role','alert'); error.hidden = true;
+    const fail = message => { if (insertionUI === state) {error.textContent = message; error.hidden = false; positionInsertion();} };
+    const heading = document.createElement('h3'); heading.textContent = popup.getAttribute('aria-label'); popup.append(heading);
+    const field = (label,value = '') => {
+      const wrapper = document.createElement('label'); wrapper.textContent = label;
+      const input = document.createElement('input'); input.type = 'text'; input.value = value; input.setAttribute('aria-label',label);
+      wrapper.append(input); return {wrapper,input};
+    };
+    const makeButton = (label,handler) => {
+      const button = document.createElement('button'); button.type = 'button'; button.textContent = label;
+      if (handler) listenInsertion(button,'click',handler); return button;
+    };
+    const footer = document.createElement('div'); footer.className = 'lightmetal-insertion-footer';
+    const cancel = makeButton('Cancel',() => closeInsertion(true));
+    const submit = document.createElement('button'); submit.type = 'submit'; submit.textContent = link ? 'Save' : 'Insert';
+    const restore = target => {
+      content.focus(); const selection = document.getSelection(); selection.removeAllRanges(); selection.addRange(target);
+      applyEditingSettings();
+    };
+    const replace = (html,target = range,command = 'insertHTML') => {
+      if (!valid()) return false;
+      restore(target); insertionObserver.disconnect();
+      const ok = exec(command,html);
+      if (ok) {
+        if (insertionUI === state) closeInsertion();
+        if (!destroyed && mode !== 'source' && !insertionUI) content.focus();
+      }
+      else {insertionObserver.observe(content,{subtree:true,childList:true,characterData:true,attributes:true});fail('The browser could not apply this change');}
+      return ok;
+    };
+    let firstField;
+    if (kind === 'link') {
+      const originalText = link ? link.textContent : range.toString();
+      const url = field('URL',link?.getAttribute('href') || ''); url.input.placeholder = 'https://example.com'; url.input.autocomplete = 'url';
+      const text = field('Display Text',originalText);
+      const targetLabel = document.createElement('label'); targetLabel.className = 'lightmetal-insertion-check';
+      const target = document.createElement('input'); target.type = 'checkbox'; target.checked = link?.getAttribute('target') === '_blank';
+      targetLabel.append(target,document.createTextNode('Open in new tab'));
+      popup.append(url.wrapper,text.wrapper,targetLabel); firstField = url.input;
+      const allowed = () => !!url.input.value.trim() && (unrestricted || allowLinkURL(url.input.value.trim(),baseURI,true));
+      const update = () => {submit.disabled = !allowed();}; listenInsertion(url.input,'input',update); update();
+      if (link) {
+        const remove = makeButton('Remove Link',() => {
+          const selected = document.createRange(); if (!valid()) return;
+          selected.selectNodeContents(link); replace(null,selected,'unlink');
+        }); footer.append(remove);
+      }
+      listenInsertion(popup,'submit',event => {
+        event.preventDefault(); if (!allowed() || !valid()) return;
+        const anchor = link ? link.cloneNode(true) : document.createElement('a');
+        anchor.setAttribute('href',url.input.value.trim());
+        if (target.checked) {
+          anchor.setAttribute('target','_blank');
+          const rel = new Set((anchor.getAttribute('rel') || '').split(/\s+/).filter(Boolean)); rel.add('noopener'); rel.add('noreferrer'); anchor.setAttribute('rel',[...rel].join(' '));
+        } else if (anchor.getAttribute('target') === '_blank') anchor.removeAttribute('target');
+        if (text.input.value !== originalText || !link && range.collapsed) anchor.textContent = text.input.value || url.input.value.trim();
+        else if (!link) anchor.append(range.cloneContents());
+        const selected = range.cloneRange(); if (link) selected.selectNode(link);
+        replace(anchor.outerHTML,selected);
       });
-      element.appendChild(pickerInput);
-      cleanups.push(() => pickerInput.remove());
+    } else {
+      const tabs = document.createElement('div'); tabs.className = 'lightmetal-insertion-tabs'; tabs.setAttribute('role','tablist'); tabs.setAttribute('aria-label','Image source');
+      const upload = document.createElement('div'), urlPanel = document.createElement('div');
+      const url = field('Image URL'); url.input.placeholder = 'https://example.com/image.png'; url.input.autocomplete = 'url';
+      const alt = field('Alt Text'); urlPanel.append(url.wrapper,alt.wrapper);
+      const status = document.createElement('p'); status.setAttribute('role','status'); status.hidden = true;
+      const file = document.createElement('input'); file.type = 'file'; file.accept = unrestricted ? '' : IMAGE_TYPES.join(','); file.hidden = true;
+      const browse = makeButton('Drag an image here or click to browse',() => file.click()); browse.className = 'lightmetal-image-dropzone';
+      upload.append(browse,file,status);
+      let activeTab = 'upload'; const tabButtons = [];
+      const allowed = () => !!url.input.value.trim() && !imageURLError(url.input.value.trim());
+      const update = () => {submit.hidden = activeTab !== 'url'; submit.disabled = state.busy || !allowed();};
+      for (const [name,label,panel] of [['upload','Upload',upload],['url','URL',urlPanel]]) {
+        if (name === 'url' && !images.allowURL) continue;
+        const tab = makeButton(label,() => {
+          if (state.busy) return;
+          activeTab = name;
+          for (const entry of tabButtons) {entry.tab.setAttribute('aria-selected',String(entry.name === name));entry.tab.tabIndex = entry.name === name ? 0 : -1;entry.panel.hidden = entry.name !== name;}
+          update(); positionInsertion();
+        });
+        tab.setAttribute('role','tab'); tab.id = `${popup.id}-${name}`; tab.setAttribute('aria-controls',`${tab.id}-panel`);
+        panel.id = `${tab.id}-panel`; panel.setAttribute('role','tabpanel'); panel.setAttribute('aria-labelledby',tab.id);
+        tab.setAttribute('aria-selected',String(name === activeTab)); tab.tabIndex = name === activeTab ? 0 : -1; panel.hidden = name !== activeTab;
+        tabButtons.push({name,tab,panel}); tabs.append(tab);
+      }
+      listenInsertion(tabs,'keydown',event => {
+        if (!['ArrowLeft','ArrowRight','Home','End'].includes(event.key) || state.busy) return;
+        event.preventDefault(); const index = tabButtons.findIndex(entry => entry.tab === document.activeElement);
+        const next = event.key === 'Home' ? 0 : event.key === 'End' ? tabButtons.length-1 : (index+(event.key === 'ArrowLeft' ? -1 : 1)+tabButtons.length)%tabButtons.length;
+        tabButtons[next].tab.click(); tabButtons[next].tab.focus();
+      });
+      const uploadFile = async selected => {
+        if (!valid() || state.busy) return;
+        state.busy = true; browse.disabled = true; tabButtons.forEach(entry => entry.tab.disabled = true);
+        error.hidden = true; status.textContent = 'Processing image…'; status.hidden = false; update();
+        const ok = await handleFile(selected,{range,valid,error:fail});
+        if (ok) {if (insertionUI === state) closeInsertion();if (!destroyed && mode !== 'source') content.focus();return;}
+        if (insertionUI !== state) return;
+        state.busy = false; browse.disabled = false; tabButtons.forEach(entry => entry.tab.disabled = false); status.hidden = true; update();
+      };
+      listenInsertion(file,'change',() => {const selected = file.files?.[0];file.value = '';if (selected) uploadFile(selected);});
+      listenInsertion(upload,'dragover',event => {event.preventDefault();event.stopPropagation();});
+      listenInsertion(upload,'drop',event => {event.preventDefault();event.stopPropagation();if (images.dragDrop) uploadFile(event.dataTransfer?.files?.[0]);});
+      listenInsertion(url.input,'input',update);
+      listenInsertion(popup,'submit',event => {
+        event.preventDefault(); if (activeTab !== 'url' || state.busy || !allowed() || !valid()) return;
+        restore(range); insertionObserver.disconnect();
+        if (placeImage(url.input.value.trim(),alt.input.value,range)) {if (insertionUI === state) closeInsertion();}
+        else {insertionObserver.observe(content,{subtree:true,childList:true,characterData:true,attributes:true});fail('Image insertion failed');}
+      });
+      popup.append(tabs,upload); if (images.allowURL) popup.append(urlPanel); firstField = browse; update();
     }
-    // Headless browsers swallow the file dialog; real browsers open it.
-    pickerInput.click();
-    return true;
-  };
+    footer.append(cancel,submit); popup.append(error,footer);
+    listenInsertion(popup,'compositionstart',() => {state.formComposing = true;});
+    listenInsertion(popup,'compositionend',() => {state.formComposing = false;});
+    listenInsertion(popup,'keydown',event => {
+      if (event.key === 'Escape' && !event.isComposing && !state.formComposing) {event.preventDefault();event.stopPropagation();closeInsertion(true);}
+    });
+    element.append(popup);
+    insertionObserver.observe(content,{subtree:true,childList:true,characterData:true,attributes:true});
+    trigger.setAttribute('aria-controls',popup.id);trigger.setAttribute('aria-expanded','true');
+    if (popup.hasAttribute('popover')) popup.showPopover(); positionInsertion(); firstField.focus();
+    return false;
+  }
 
-  const imageResult = () => {
-    if (!images.enabled) {
-      showError("Images are disabled");
-      return false;
-    }
-    return images.allowURL ? imagePrompt() : imagePicker();
-  };
+  const imageResult = button => images.enabled ? openInsertion('image',button) : false;
 
   // Drop and paste share the same file validation/upload path.
   const onDrop = (event) => {
@@ -932,7 +1168,6 @@ export const init = (settings) => {
   listen(element, "dragleave", onDragLeave);
   listen(content, "paste", onPaste);
   cleanups.push(() => {
-    clearTimeout(errorTimer);
     clearTimeout(formatTimer);
   });
 
@@ -1067,7 +1302,6 @@ export const init = (settings) => {
       if ((command === "rowAbove" || command === "rowBelow" ||
           command === "columnLeft" || command === "columnRight") &&
           !tableSizeAllowed(rows.length, tableWidth(clone))) {
-        showError(TABLE_SIZE_ERROR);
         return false;
       }
       // Remove references to headers deleted by this operation, not unrelated IDs.
@@ -1135,7 +1369,7 @@ export const init = (settings) => {
     if (!tableMenu || tableMenu.hidden) return;
     tableMenu.style.maxWidth = `${Math.max(0, window.innerWidth - 16)}px`;
     tableMenu.style.maxHeight = `${Math.max(0, window.innerHeight - 16)}px`;
-    const anchor = tableTrigger.getBoundingClientRect(), popup = tableMenu.getBoundingClientRect();
+    const anchor = tableAnchor().getBoundingClientRect(), popup = tableMenu.getBoundingClientRect();
     tableMenu.style.left = `${Math.max(8, Math.min(anchor.left, window.innerWidth - popup.width - 8))}px`;
     const below = anchor.bottom + 4;
     tableMenu.style.top = `${below + popup.height <= window.innerHeight - 8 ? below : Math.max(8, Math.min(anchor.top - popup.height - 4, window.innerHeight - popup.height - 8))}px`;
@@ -1178,6 +1412,7 @@ export const init = (settings) => {
   };
   const tableResult = (last = false) => {
     if (tableMenu && !tableMenu.hidden) { closeTableMenu(true); return false; }
+    closeInsertion(); overflow.close(); formatting.close();
     closeTableDropdown(); captureTableRange();
     if (!tableMenu) createTableMenu();
     // Capture the cell before focus moves from the toolbar into the menu.
@@ -1225,6 +1460,7 @@ export const init = (settings) => {
     }
     updateTableControls();
     if (settings.onChange) settings.onChange(content.innerHTML);
+    updateFullscreenLayout();
   };
 
   const onKeyDown = (event) => {
@@ -1258,6 +1494,7 @@ export const init = (settings) => {
 
   const onSourceInput = () => {
     if (settings.onChange) settings.onChange(source.value);
+    updateFullscreenLayout();
   };
 
   // Toolbar buttons are natively keyboard-focusable and carry their label
@@ -1272,6 +1509,11 @@ export const init = (settings) => {
   listen(content, "input", onInput);
   listen(content, "keydown", onKeyDown);
   listen(source, "input", onSourceInput);
+
+  const formatting = createFormattingControls({element,content,listen,exec,
+    canEdit: () => !destroyed && mode === 'wysiwyg', applySettings: applyEditingSettings,
+    onInteraction: () => {closeInsertion();overflow.close();closeTableMenu(); closeTableDropdown();}
+  });
 
   const toolbarButtons = [];
   const buttons = [];
@@ -1300,16 +1542,32 @@ export const init = (settings) => {
       });
     }
 
-    // In source mode only the source button acts; WYSIWYG commands must not
-    // fire against the hidden editor.
+    if (action.result === linkResult || action.result === imageResult) {
+      button.setAttribute('aria-haspopup','dialog'); button.setAttribute('aria-expanded','false');
+      listen(button,'mousedown',event => event.preventDefault());
+      listen(button,'keydown',event => {
+        if (event.key === 'ArrowDown' && !event.altKey && !event.ctrlKey && !event.metaKey) {event.preventDefault();action.result(button);}
+      });
+    }
+    const formattingName = Object.keys(formattingActions).find(name =>
+      action.result === formattingActions[name].result || action.name === name && action.result == null);
+    if (formattingName) formatting.bind(formattingName,button);
+    if (action.result === toggleFullscreen) {
+      listen(button,'mousedown',event => event.preventDefault());
+      if (action.state === fullscreenAction.state) fullscreenButtons.push(button);
+    }
+
+    // Source mode permits view controls, never hidden WYSIWYG commands.
     const onClick = () => {
-      if (mode === "source" && action !== sourceAction &&
+      if (mode === "source" && action !== sourceAction && action.name !== 'fullscreen' &&
           !(action.name === "source" && action.result === sourceAction.result)) return;
+      if (action.result === toggleFullscreen) { toggleFullscreen(); return; }
       if (mode === "wysiwyg") applyEditingSettings();
       if (action.result === tableResult) tableTrigger = button;
-      if (action.result()) content.focus();
+      const result = action.result === linkResult || action.result === imageResult ? action.result(button) : action.result();
+      if (result && mode === 'wysiwyg') content.focus();
     };
-    listen(button, "click", onClick);
+    if (!formattingName) listen(button, "click", onClick);
 
     if (action.state) {
       button.setAttribute("aria-pressed", "false");
@@ -1325,12 +1583,14 @@ export const init = (settings) => {
 
     actionbar.appendChild(button);
     buttons.push(button);
-    if (!settings.actions) {
-      const name = Object.keys(defaultActions).find(name => defaultActions[name] === resolvedActions[index]) || 'source';
-      toolbarButtons.push({ button, name });
-    }
+    const name = Object.keys(defaultActions).find(name => defaultActions[name] === resolvedActions[index]) || resolvedActions[index].name || (resolvedActions[index] === sourceAction || resolvedActions[index].result === sourceAction.result ? 'source' : 'custom');
+    if (!settings.actions && ['blocks','bold','text','alignment','table','fullscreen','more','undo'].includes(name)) button.classList.add('lightmetal-group-start');
+    toolbarButtons.push({ button, name, secondary: !settings.actions && ['formatting','indentation'].includes(name) });
   });
-  if (!settings.actions) cleanups.push(groupToolbar(actionbar, toolbarButtons));
+  const overflow = createToolbarOverflow({element,toolbar:actionbar,entries:toolbarButtons,listen,defaultToolbar:!settings.actions,
+    closeMenus: () => {closeInsertion();formatting.close();closeTableMenu();closeTableDropdown();}
+  });
+  cleanups.push(() => overflow.destroy());
 
   // Enter through the writing field; keep native toolbar traversal inside.
   const setToolbarTabIndex = (tabIndex) => {
@@ -1347,6 +1607,9 @@ export const init = (settings) => {
         !tableTrigger?.contains(event.target)) closeTableDropdown();
   };
   const onTableEscape = (event) => {
+    if (event.key === 'Escape' && insertionUI && !insertionUI.formComposing && !event.isComposing && !composing) {
+      event.preventDefault(); closeInsertion(true); return;
+    }
     if (event.key === "Escape" && tableDropdown && !tableDropdown.hidden) {
       event.preventDefault();
       closeTableDropdown(true);
@@ -1356,6 +1619,25 @@ export const init = (settings) => {
   };
   listen(document, "pointerdown", onTableOutsideClick);
   listen(document, "keydown", onTableEscape);
+  for (const field of [content,source]) {
+    listen(field,'compositionstart',() => {composing = true;closeInsertion();});
+    listen(field,'compositionend',() => {composing = false;});
+  }
+  listen(document,'keydown',event => {
+    if (event.key !== 'Escape' || event.defaultPrevented || event.isComposing || composing || !fullscreen) return;
+    if (insertionUI || tableMenu && !tableMenu.hidden || tableDropdown && !tableDropdown.hidden ||
+        element.querySelector('.lightmetal-format-popup:not([hidden])')) return;
+    event.preventDefault(); event.stopPropagation(); exitFullscreen();
+  });
+  listen(document,'pointerdown',event => {
+    if (insertionUI && !insertionUI.popup.contains(event.target) && !insertionUI.trigger.contains(event.target)) closeInsertion();
+  });
+  listen(document,'focusin',event => {
+    if (insertionUI && !insertionUI.popup.contains(event.target) && !insertionUI.trigger.contains(event.target) && event.target !== content) closeInsertion();
+  });
+  listen(window,'resize',positionInsertion); listen(window,'scroll',positionInsertion,true);
+  listen(window, 'resize', updateFullscreenLayout);
+  listen(window, 'scroll', updateFullscreenLayout, true);
   listen(window, "resize", positionTableDropdown);
   listen(window, "scroll", positionTableDropdown, true);
   listen(window, "resize", positionTableMenu);
@@ -1364,18 +1646,21 @@ export const init = (settings) => {
     if (tableMenu && !tableMenu.hidden && !tableMenu.contains(event.target) && !actionbar.contains(event.target)) closeTableMenu();
   });
 
+  element.classList.add('lightmetal-html');
   element.appendChild(actionbar);
   element.appendChild(tablebar);
   element.appendChild(content);
   if (hasSource) element.appendChild(source);
+  element.appendChild(overflow.popup);
 
   /** Current HTML, in either mode. */
   const getHTML = () => (mode === "source" ? source.value : content.innerHTML);
 
   /** Replace content in either mode. Fires onChange. */
   const setHTML = (html) => {
+    closeInsertion();
     clearTimeout(formatTimer);
-    closeTableMenu(); closeTableDropdown();
+    closeTableMenu(); closeTableDropdown(); formatting.close();
     if (sanitized) html = sanitizeHTML(html, baseURI, images.allowBase64);
     if (mode === "source") source.value = html;
     else content.innerHTML = html;
@@ -1393,7 +1678,7 @@ export const init = (settings) => {
   /**
    * Programmatic image insertion: a URL, a base64 data URI, or a
    * File/Blob. Resolves true on success, false on failure (the reason is
-   * shown as a toolbar note).
+   * returned as false without a toolbar notice).
    */
   const insertImage = (imgSource) => {
     if (mode === "source" || destroyed) return Promise.resolve(false);
@@ -1403,7 +1688,6 @@ export const init = (settings) => {
     if (imgSource && typeof Blob !== "undefined" && imgSource instanceof Blob) {
       return handleFile(imgSource);
     }
-    showError("insertImage expects a URL, data URI, or File");
     return Promise.resolve(false);
   };
 
@@ -1414,7 +1698,10 @@ export const init = (settings) => {
   const destroy = () => {
     if (destroyed) return;
     destroyed = true;
-    closeTableMenu(); closeTableDropdown();
+    exitFullscreen(false);
+    fullscreenResize?.disconnect();
+    closeInsertion();
+    closeTableMenu(); closeTableDropdown(); formatting.destroy();
     tableMenu?.remove(); tableDropdown?.remove();
     cleanups.forEach((fn) => fn());
     actionbar.remove();
@@ -1422,6 +1709,7 @@ export const init = (settings) => {
     activeCell = null;
     content.remove();
     source.remove();
+    if (ownsHTMLClass) element.classList.remove('lightmetal-html');
   };
 
   return { element, content, source, getHTML, setHTML, getText, insertTable, insertImage, destroy };

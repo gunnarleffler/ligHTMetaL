@@ -65,10 +65,11 @@
     <p>This is the text returned by the editor, not HTML. Nothing is uploaded or stored automatically.</p>
     <pre data-code-language="markdown" id="raw" tabindex="0" aria-label="Actual Markdown output"></pre>
     <p class="notice">Select text and try the toolbar or Ctrl/Cmd+B/I/K. Your Markdown stays editable,
-      with native selection and undo. Preview and Side-by-side render locally with MeltDown;
-      images appear as placeholders. Use a maintained HTML sanitizer when publishing untrusted content.</p>
+      with native selection and undo. Click a source task marker to check or uncheck it.
+      Preview stays read-only, including the HTML half of Side-by-side. Both render locally with MeltDown;
+      images render in Preview while their Markdown stays visible in source. Use a maintained HTML sanitizer when publishing untrusted content.</p>
     <h2>Quickstart</h2>
-    <p>Load shared editor CSS, then MaiDEn CSS. MeltDown enables Preview and Side-by-side; poliSH adds code colors through its highlighting hook.</p>
+    <p>Load shared editor CSS, then MaiDEn CSS. MeltDown enables Preview and Side-by-side. The optional poliSH hook colors fenced and inline code as you type. Unlabeled code uses language guessing; explicit labels take priority.</p>
     <pre data-code-language="html" style="overflow:auto;padding:16px;border:1px solid;border-radius:6px"><code>&lt;link rel="stylesheet" href="lightmetal.css"&gt;
 &lt;link rel="stylesheet" href="maiden.css"&gt;
 &lt;link rel="stylesheet" href="polish.css"&gt;
@@ -80,6 +81,7 @@
   const highlighter = polish.createHighlighter({ languages: polish.allLanguages });
   const editor = maiden.init({
     element: document.getElementById('editor'),
+    sourceHighlight: highlighter.highlightTokens,
     preview: { render: text =&gt; meltDown.parse(text, { highlight: highlighter.highlight }) },
     onChange: markdown =&gt; console.log(markdown)
   });
@@ -91,41 +93,11 @@
     <script src="../dist/polish.js"></script>
     <script src="../examples/code-blocks.js"></script>
     <script src="../examples/polish-demo.js"></script>
+    <script src="../examples/markdown-samples.js"></script>
+    <script src="../examples/markdown-demo.js"></script>
     <script src="../dist/maiden.js"></script>
     <script>
-      const initialMarkdown = [
-        "# Markdown, down to the metal.",
-        "",
-        "## A heading you can still edit",
-        "Keep the **markers**. Make the **words** bold or ***bold and italic***.",
-        "Code keeps its spelling, even inside **`bold code`**.",
-        "Word-internal underscores stay plain: café_métal_é.",
-        'A [**local link**](guide(one) "A title") keeps its destination visible.',
-        'An image stays source too: ![*alt text*](<images/local image.png>).',
-        "",
-        "An underline-style heading",
-        "--------------------------",
-        "The underline stays in your Markdown too.",
-        "",
-        "```js",
-        "const message = 'Code, with a little poliSH.';",
-        "console.log(message);",
-        "```",
-        "",
-        "Try typing, selecting across lines, wrapping a long sentence, and undoing your edits.",
-        "Change a ## heading into plain text by deleting its markers.",
-        "",
-        "> A quote with a nested list:",
-        "> - ## A nested heading",
-        ">   The prefixes stay visible.",
-        ">   ```text",
-        ">   **This is code, not bold.**",
-        ">   ```",
-        "",
-        "Literal HTML stays text: <img src=x onerror=alert(1)>",
-        "Unicode stays text too: café, 日本語, and 🦊.",
-        ""
-      ].join("\n");
+      const initialMarkdown = markdownSamples.full;
       const host = document.getElementById("markdown-editor");
       // The output painter reuses spans/Text nodes to preserve native typing groups.
       const rawOutput = document.getElementById('raw');
@@ -139,10 +111,11 @@
         host.classList.toggle("lightmarkdown-native", document.getElementById("native").checked);
       }
       try {
-        window.__markdownEditor = maiden.init({ element: host, preview: { render: polishDemo.render },
+        window.__markdownEditor = maiden.init({ element: host, sourceHighlight: polishDemo.highlighter.highlightTokens, preview: { render: polishDemo.render },
           onChange(value) { exampleCode.write(rawOutput, value, 'markdown'); } });
         window.__markdownEditor.setMarkdown(initialMarkdown);
         applyAppearance();
+        markdownDemo.startSplit(window.__markdownEditor);
         editorStatus.textContent = "Native browser editing and undo. Preview and Side-by-side keep your Markdown source intact.";
       } catch (error) {
         window.__markdownError = error.message;

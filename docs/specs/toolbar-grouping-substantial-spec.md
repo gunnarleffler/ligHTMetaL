@@ -1,12 +1,9 @@
 # Editor UI refinement: toolbar grouping and Substantial
 
-User-approved direction. Both phases are implemented in the user-authorized
-checkpoint `Group default toolbars and add Substantial skin`.
-Focused Chromium/Firefox grouping, Substantial, and separator tests pass; package
-checks cover seven skins in plain/minified forms. No new full-suite pass is claimed.
-Implement in two independent phases. Preserve editor
-behavior and the existing default skin. Phase 1 targets both MaiDEn and the HTML editor. Preserve each editor's existing
-controls and order; do not add unsupported controls to the HTML editor.
+Grouping and the optional Substantial skin are implemented. The table below
+defines MaiDEn's default grouping; the HTML editor uses its responsive formatting
+menus and overflow. Preserve configured control order and custom action arrays.
+Grouping is shared behavior, not a skin requirement.
 
 ## Phase 1: default toolbar grouping
 
@@ -37,17 +34,16 @@ where practical. Grouping belongs in shared editor configuration, not a skin.
 ### Appearance
 
 - One-pixel vertical separator, about 16–18px high.
-- 4px horizontal margin per side; vertically centered. User reduced this from
-  the initial 8px to avoid empty-button-sized gaps.
+- 4px horizontal margin per side; vertically centered to avoid button-sized gaps.
 - Use the existing muted border color, with lower visual contrast than the
   toolbar's bottom border.
 - Apply consistently across all skins. Do not otherwise change their appearance.
 
 ### Acceptance
 
-Default controls form the groups above. Separators adapt automatically to the
-available controls across skins and narrow layouts. Toolbar functionality and
-custom configuration compatibility remain intact.
+MaiDEn defaults form the groups above; HTML retains its menu/overflow grouping.
+Separators adapt to available controls across skins and narrow layouts. Toolbar
+functionality and custom configuration compatibility remain intact.
 
 ## Phase 2: optional Substantial skin
 
@@ -111,5 +107,4 @@ patterns before extending them. Modify the appropriate rules instead of layering
 compensating overrides. Keep changes focused; do not refactor unrelated code.
 Preserve backward compatibility for skins and editor configurations.
 
-Review and test each phase independently. Get separate approval before committing
-new work; the preceding code-background fix has its own authorized checkpoint.
+Review and test behavior and skin changes independently. Ask before committing.

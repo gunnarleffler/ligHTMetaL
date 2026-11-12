@@ -10,6 +10,7 @@
 #   maiden.*            optional Markdown companion: IIFE, minified, ESM, CSS
 #   MeltDown.*          optional ligHTMetaL::MeltDown parser: IIFE, minified, ESM
 #   polish.*            optional full-catalog syntax highlighter, CSS themes
+#   etch.*              independent sketch editor: IIFE, minified, ESM, CSS
 #   skins/*.css         optional skins, plain and minified
 #
 # Run `npm install` first.
@@ -40,6 +41,12 @@ mkdir -p "$DIST"
 "$ESBUILD" "$SRC/polish-full.js" --bundle --format=iife --global-name=polish --target=es2022 --outfile="$DIST/polish.js"
 "$ESBUILD" "$SRC/polish-full.js" --bundle --format=iife --global-name=polish --target=es2022 --minify --outfile="$DIST/polish.min.js"
 "$ESBUILD" "$SRC/polish-full.js" --bundle --format=esm --target=es2022 --outfile="$DIST/polish.esm.js"
+"$ESBUILD" "$SRC/etch.js" --bundle --format=iife --global-name=etch --target=es2022 --outfile="$DIST/etch.js"
+"$ESBUILD" "$SRC/etch.js" --bundle --format=iife --global-name=etch --target=es2022 --minify --outfile="$DIST/etch.min.js"
+"$ESBUILD" "$SRC/etch.js" --bundle --format=esm --target=es2022 --outfile="$DIST/etch.esm.js"
+cp "$SRC/etch.css" "$DIST/etch.css"
+"$ESBUILD" "$SRC/etch.css" --minify --outfile="$DIST/etch.min.css"
+
 node "$ROOT/build/polish-css.mjs"
 cp "$SRC/polish.css" "$DIST/polish.css"
 "$ESBUILD" "$SRC/polish.css" --minify --outfile="$DIST/polish.min.css"

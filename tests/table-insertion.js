@@ -164,7 +164,8 @@ module.exports = async function tableInsertionChecks(page, check) {
   await host.getByRole('button', { name: 'Source', exact: true }).click();
   check('source mode displays clean inserted table markup', await host.locator('textarea').inputValue() === await html() &&
     (await html()).includes('<table><tbody><tr><td><br></td></tr></tbody></table>'));
-  await trigger.click();
+  check('table is disabled in Source mode',await trigger.isDisabled());
+  await trigger.evaluate(button=>button.click());
   check('source mode cannot open the table popup', await popup.isHidden());
   await host.getByRole('button', { name: 'Source', exact: true }).click();
 

@@ -23,6 +23,23 @@ export function createHighlighter(options = {}) {
   };
   for (const language of languages) register(language);
 
+  const resolveLanguage = (source, language) => {
+    if (typeof source !== 'string') throw new TypeError('Source must be a string');
+    if (typeof language !== 'string') throw new TypeError('Language must be a string or undefined');
+    return language.trim().toLowerCase() || (guessLanguage ? guessRegisteredLanguage(source, core.hasLanguage) : '') || 'plain';
+  };
+
+  /**
+   * Source-preserving tokens for painters. ANSI is plain here: terminal rendering
+   * can consume controls and change text, which an editing overlay must not do.
+   * @param {string} source
+   * @param {string} [language]
+   */
+  const highlightTokens = (source, language = '') => {
+    const name = resolveLanguage(source, language);
+    return core.tokenize(source, { language: name === 'ansi' ? 'plain' : name });
+  };
+
   /**
    * HTML contents only. Missing languages may be guessed; explicit names win.
    * Strict mode exposes core diagnostics as exceptions for known/unknown syntax
@@ -34,10 +51,8 @@ export function createHighlighter(options = {}) {
     if (typeof source !== 'string') throw new TypeError('Source must be a string');
     if (!settings || typeof settings !== 'object' || Array.isArray(settings)) throw new TypeError('Expected highlight options object');
     const { language = '', strict = false } = settings;
-    if (typeof language !== 'string') throw new TypeError('Language must be a string or undefined');
     if (typeof strict !== 'boolean') throw new TypeError('strict must be a boolean');
-    const explicitName = language.trim().toLowerCase();
-    const name = explicitName || (guessLanguage ? guessRegisteredLanguage(source, core.hasLanguage) : '');
+    const name = resolveLanguage(source, language);
     if (name === 'ansi') return ansiToHTML(source, { maxSteps, strict });
     const result = core.tokenize(source, { language: name || 'plain', strict });
     return renderHTML(source, result.tokens);
@@ -51,6 +66,7 @@ export function createHighlighter(options = {}) {
       return typeof name === 'string' && (reserved.has(name.trim().toLowerCase()) || core.hasLanguage(name));
     },
     highlightHTML,
+    highlightTokens,
     /**
      * Direct hook for MeltDown: pass this function without binding it.
      * @param {string} source

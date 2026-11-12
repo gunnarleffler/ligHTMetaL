@@ -4,6 +4,23 @@ Reviewed the 0.6.0 development working tree on 2026-10-22. This review covers
 ligHTMetaL, MaiDEn, MeltDown, and poliSH. It is not a security certification or
 a replacement for application-side sanitization.
 
+## Current preview image boundary
+
+MaiDEn Preview and Side-by-side now load validated HTTP(S) and supported raster
+base64 image URLs by default. Relative URLs must resolve to HTTP(S). Blob URLs
+must match the editor document's parsed non-opaque origin, not a string prefix or
+base element. Images keep src/alt/title, validated positive integer dimensions,
+and known loading/decoding values, and use no-referrer. Handlers, srcset, styles,
+executable URLs, cross-origin/opaque blobs, and SVG data URLs stay blocked. Remote images may make tracking requests; URL
+validation does not authenticate image bytes. Renderer raw HTML does not bypass
+this filter. See [the preview contract](reference.md#help-and-optional-rendered-preview).
+
+The review below records the 0.6.0 placeholder-only policy. Current regressions
+allow only requests matching validated preview image sources; other payload
+resources and execution remain forbidden. Image-specific browser tests cover
+Markdown/raw output, both views, source/history preservation, and URL/attribute
+filtering in `tests/markdown-preview-images.js`.
+
 ## Result
 
 No reproducible default-path execution or preview resource-loading bug was found
@@ -77,9 +94,6 @@ targets are removed; same-document heading links work, and other resources remai
 logo-header special case are removed. Test payloads produce no payload requests
 or execution. Normal parser/editor previews keep raw HTML escaped. This demo
 policy is not a general-purpose HTML sanitizer.
-The current `0.6.0-dev.0` archive passed package smoke separately with 128 files,
-including the new editor reference. Final full-suite and archive logs are
-`/tmp/lightmetal-single-document-{full,package}.log`.
 The native cross-document diagnostic still fails on Firefox 157.0 as described
 below; a passing product suite does not mean that runtime issue is fixed.
 
@@ -104,7 +118,8 @@ three original Markdown groups also pass in the Firefox 155.0 comparison on the
 same working tree. No browser was downloaded, replaced, or selected as a fallback.
 This identifies a regression in the tested Firefox/Playwright runtime, not an
 editor-dependent reproducer. It does not establish behavior in stock Firefox;
-a separate manual check is still needed.
+stock-Firefox validation is not required by the
+[approved suite scope](releasing.md#approved-validation-scope).
 
 The standalone diagnostic checks parent and child contents before Ctrl+Z. This
 reports misrouted parent input directly instead of presenting it as an undo

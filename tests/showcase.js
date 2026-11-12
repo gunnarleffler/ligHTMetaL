@@ -1,5 +1,6 @@
 const assert = require('node:assert/strict');
 const path = require('node:path');
+const { withPage } = require('./browser-checks');
 const ansiFile = path.join(__dirname, '../examples/POLISH.ANS');
 const ansiArt = require('node:fs').readFileSync(ansiFile, 'utf8');
 const plainArt = ansiArt.replace(/\x1b\[\?25[lh]/g, '').replace(/\x1b\[[0-9;]*m/g, '');
@@ -29,15 +30,33 @@ async function assertParserTheme(page, mode) {
 }
 
 async function runShowcaseChecks(browser, base) {
-  const page = await browser.newPage();
-  const errors = [];
-  page.on('pageerror', error => errors.push(error.message));
-  try {
-    for (const prefix of [base, base + 'examples/', 'file://' + path.join(__dirname, '../examples/')]) {
+  for (const prefix of [base, base + 'examples/', 'file://' + path.join(__dirname, '../examples/')]) {
+    await withPage(browser, 'gallery ' + prefix, async page => {
       await page.emulateMedia({ colorScheme: 'dark' });
       await page.goto(prefix + 'index.html');
-      await page.locator('#html-editor .lightmetal-content').waitFor();
+      await page.locator('#made-editor .lightmarkdown-preview h1').waitFor();
+      assert.equal(await page.getByRole('tab').first().getAttribute('id'), 'tab-markdown');
+      assert.equal(await page.locator('#tab-markdown').getAttribute('aria-selected'), 'true');
+      assert.equal(await page.locator('#tab-markdown').evaluate(node => node.tabIndex), 0);
+      assert.equal(await page.locator('#panel-html').isHidden(), true);
+      assert.equal(await page.locator('#made-editor .lightmarkdown-input').isVisible(), true);
+      assert.equal(await page.getByRole('button', { name: 'Side-by-side', exact: true }).getAttribute('aria-pressed'), 'true');
+      assert.equal(await page.evaluate(() => document.activeElement === document.body && scrollY === 0), true, 'startup shows split without taking focus or scrolling');
       await page.getByRole('heading', { name: 'Built to stay useful', exact: true }).waitFor();
+      for (const panel of ['html', 'markdown']) {
+        for (const framework of ['react', 'vue']) {
+          const link = page.locator('#panel-' + panel).getByRole('link', { name: framework === 'react' ? 'React example' : 'Vue example', exact: true, includeHidden: true });
+          assert.equal(await link.getAttribute('href'), '../examples/frameworks/' + framework + '.html');
+          const destination = await link.evaluate(node => node.href);
+          if (prefix.startsWith('file:')) assert.equal(destination, 'file://' + path.join(__dirname, '../examples/frameworks/', framework + '.html'));
+          else {
+            assert.equal(new URL(destination).pathname, '/examples/frameworks/' + framework + '.html');
+            const response = await page.request.get(destination);
+            assert.equal(response.status(), 200, panel + '/' + framework + ': local framework example resolves');
+            assert.match(await response.text(), /npm run build:framework-examples/);
+          }
+        }
+      }
       assert.match(await page.locator('section[aria-labelledby="philosophy-heading"]').textContent(), /personal app used since 2012/);
       await page.getByRole('tab', { name: 'Markdown Parser', exact: true }).click();
       await assertParserTheme(page, 'dark');
@@ -53,11 +72,66 @@ async function runShowcaseChecks(browser, base) {
       await page.emulateMedia({ colorScheme: 'light' });
       await assertParserTheme(page, 'light');
       await page.getByRole('tab', { name: 'HTML Editor', exact: true }).focus();
-      await page.keyboard.press('ArrowRight');
+      await page.keyboard.press('ArrowLeft');
       await page.locator('#panel-markdown').waitFor({ state: 'visible' });
       assert.equal(await page.locator('#tab-markdown').getAttribute('aria-selected'), 'true');
+      const markdownSample = await page.evaluate(() => markdownSamples.full);
+      assert.equal(await page.locator('#markdown-output').textContent(), markdownSample, 'gallery starts with the shared editable Markdown document');
+      await page.locator('#panel-markdown .lightmarkdown-paint .token.keyword').first().waitFor();
+      assert.equal(await page.locator('#made-editor img').count(), 0, 'branding stays outside saved content');
+      assert.equal(await page.getByRole('button', { name: 'Side-by-side', exact: true }).getAttribute('aria-pressed'), 'true');
+      const markdownPreview = page.locator('#panel-markdown .lightmarkdown-preview');
+      await markdownPreview.locator('table').waitFor();
+      assert.equal(await markdownPreview.locator('h1').textContent(), 'Your words. Your metal.');
+      assert.equal(await markdownPreview.locator('table tbody tr').count(), 5);
+      assert.equal(await markdownPreview.locator('blockquote blockquote').count(), 1);
+      assert.equal(await markdownPreview.locator('ul ol').count(), 1);
+      await markdownPreview.locator('.token.keyword').first().waitFor();
+      const task = await page.locator('#made-editor .lightmarkdown-input').evaluate(content => {
+        const line = [...content.children].find(node => node.textContent === '- [ ] Click this source checkbox');
+        line.scrollIntoView({ block: 'nearest' });
+        const range = document.createRange(); range.setStart(line.firstChild, 3); range.setEnd(line.firstChild, 4);
+        const rect = range.getBoundingClientRect();
+        return { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 };
+      });
+      await page.mouse.click(task.x, task.y);
+      assert.equal(await page.locator('#markdown-output').textContent(), markdownSample.replace('- [ ] Click this source checkbox', '- [x] Click this source checkbox'));
+      await page.keyboard.press('Control+z');
+      assert.equal(await page.locator('#markdown-output').textContent(), markdownSample, 'showcase tasks support native Undo');
       await page.getByRole('button', { name: 'Side-by-side', exact: true }).click();
-      await page.locator('#panel-markdown .token.keyword').first().waitFor();
+      await page.getByRole('tab', { name: 'HTML Editor', exact: true }).click();
+      await page.getByRole('tab', { name: 'Markdown Editor', exact: true }).click();
+      assert.equal(await page.getByRole('button', { name: 'Side-by-side', exact: true }).getAttribute('aria-pressed'), 'false', 'tab changes retain the chosen view');
+      await page.getByRole('button', { name: 'Side-by-side', exact: true }).click();
+      await page.getByRole('tab', { name: 'Sketch Editor', exact: true }).click();
+      const sketch = page.locator('#sketch-editor');
+      const surface = sketch.locator('.etch-viewport');
+      await surface.waitFor();
+      await sketch.getByRole('button', {name:'Pen',exact:true}).click();
+      await surface.scrollIntoViewIfNeeded();
+      const box = await surface.boundingBox();
+      await page.mouse.move(box.x + 40, box.y + 80);
+      await page.mouse.down();
+      await page.mouse.move(box.x + 160, box.y + 120, {steps:8});
+      await page.mouse.up();
+      await page.waitForFunction(() => document.querySelector('#sketch-editor .etch-layer-count')?.textContent === '1');
+      await page.getByRole('tab', {name:'HTML Editor',exact:true}).click();
+      await page.getByRole('tab', {name:'Sketch Editor',exact:true}).click();
+      assert.equal(await sketch.locator('.etch').count(), 1, 'tab changes reuse the editor');
+      assert.equal(await sketch.locator('.etch-layer-count').textContent(), '1', 'tab changes retain artwork');
+      await sketch.getByRole('button', {name:'Undo',exact:true}).click();
+      await page.waitForFunction(() => document.querySelector('#sketch-editor .etch-layer-count')?.textContent === '0');
+      await sketch.getByRole('button', {name:'Redo',exact:true}).click();
+      await page.waitForFunction(() => document.querySelector('#sketch-editor .etch-layer-count')?.textContent === '1');
+      const sketchLink = page.getByRole('link', {name:'Open the sketch editor →',exact:true});
+      assert.equal(await sketchLink.getAttribute('href'), 'etch/index.html');
+      if (!prefix.startsWith('file:')) {
+        const sketchPage = await browser.newPage();
+        try {
+          await sketchPage.goto(new URL(await sketchLink.getAttribute('href'), page.url()).href);
+          await sketchPage.locator('#editor .etch-viewport').waitFor();
+        } finally { await sketchPage.close(); }
+      }
       await page.getByRole('tab', { name: 'Syntax Highlighter', exact: true }).click();
       await page.locator('#polish-output .token.keyword').first().waitFor();
       await assertANSIArt(page);
@@ -75,8 +149,9 @@ async function runShowcaseChecks(browser, base) {
       await frame.locator('h1').filter({ hasText: 'Changed' }).waitFor();
       assert.equal(await frame.locator('a').getAttribute('href'), null);
       for (const file of ['html.html', 'markdown.html', 'meltdown.html', 'skins.html', 'markdown-skins.html', 'polish.html', 'markdown-iframe.html']) {
-        await page.goto(prefix + file);
-        await page.locator('h1').waitFor();
+        const response = await page.goto(prefix + file);
+        if (!prefix.startsWith('file:')) assert.equal(response.status(), 200, file + ': example loads');
+        assert.ok(await page.title(), file + ': example has a page title');
         assert.equal(await page.locator('pre:not(.lightmetal pre):not(.code)').count(), 0, file + ': every page code block must use poliSH');
         for (const block of await page.locator('pre[data-code-language]').all()) {
           assert.equal(await block.evaluate(node => node.classList.contains('code')), true);
@@ -84,6 +159,8 @@ async function runShowcaseChecks(browser, base) {
         }
         if (file === 'markdown-skins.html') {
           await page.waitForFunction(() => Object.keys(window.__skinEditors || {}).length === 8);
+          assert.equal(await page.evaluate(() => Object.values(__skinEditors).every(editor => editor.getMarkdown() === markdownSamples.compact && editor.element.classList.contains('lightmarkdown-split'))), true, 'skin cards start with the compact document in split view');
+          assert.equal(await page.evaluate(() => document.activeElement === document.body && scrollY === 0), true, 'skin startup does not jump to the last editor');
           await page.locator('#palette').selectOption('dark');
           assert.equal(await page.locator('html').getAttribute('data-lightmetal-theme'), 'dark');
           assert.equal(await page.locator('#skin-frost').evaluate(node => getComputedStyle(node).backgroundColor), 'rgb(20, 36, 45)');
@@ -104,7 +181,9 @@ async function runShowcaseChecks(browser, base) {
           await assertParserTheme(page, 'light');
         }
       }
-    }
+    });
+  }
+  await withPage(browser, 'poliSH live output and native history', async page => {
     // Complete the initial AJAX render while typing; it must not split native undo.
     let releaseArt;
     const artReady = new Promise(resolve => { releaseArt = resolve; });
@@ -187,8 +266,7 @@ async function runShowcaseChecks(browser, base) {
     await page.goto(base);
     await page.getByRole('tab', { name: 'Markdown Editor', exact: true }).click();
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
-    assert.deepEqual(errors, []);
-    await require('./showcase-readme.js')(browser, base);
-  } finally { await page.close(); }
+  });
+  await require('./showcase-readme.js')(browser, base);
 }
 module.exports = { runShowcaseChecks };

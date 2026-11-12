@@ -5,15 +5,11 @@ const element = document.getElementById("editor");
 element.style.setProperty("--lightmarkdown-height", "320px");
 window.__markdownEditor = maiden.init({
   element,
+  sourceHighlight: polishDemo.highlighter.highlightTokens,
   preview: { render: polishDemo.render },
   onChange(markdown) {
     // Same-origin example glue: send text, not HTML, to the parent application.
     window.frameElement?.dispatchEvent(new CustomEvent("markdownchange", { detail: markdown }));
   }
 });
-window.__markdownEditor.setMarkdown([
-  "## Own native history",
-  "",
-  "The toolbar and writing area live in this document.",
-  "Edit here, then edit the application note outside."
-].join("\n"));
+window.__markdownEditor.setMarkdown(markdownSamples.compact);

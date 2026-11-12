@@ -207,10 +207,12 @@ async function runReview(engine, name, base) {
       report.urls.push({ url, image, imported, upload });
     }
 
-    // Image prompt runs its URL validator, unlike the link prompt below.
+    // Image and Link forms apply the existing normal-mode URL policy.
     await createEditor(page);
-    page.once("dialog", (dialog) => dialog.accept("javascript:window.__sentinel++"));
     await page.locator('#review-host button[title="Image"]').click();
+    await page.locator('#review-host .lightmetal-insertion-popup').getByRole('tab',{name:'URL',exact:true}).click();
+    await page.getByLabel('Image URL',{exact:true}).fill('javascript:window.__sentinel++');
+    assert.equal(await page.locator('#review-host .lightmetal-insertion-popup button[type="submit"]').isDisabled(),true);
     report.imagePrompt = await page.evaluate(() => ({
       html: window.__editor.getHTML(), executions: window.__sentinel,
       error: window.__editor.element.querySelector(".lightmetal-error")?.textContent
@@ -227,8 +229,9 @@ async function runReview(engine, name, base) {
       selection.removeAllRanges();
       selection.addRange(range);
     });
-    page.once("dialog", (dialog) => dialog.accept("javascript:window.__sentinel++"));
     await page.locator('#review-host button[title="Link"]').click();
+    await page.locator('#review-host .lightmetal-insertion-popup').getByLabel('URL',{exact:true}).fill('javascript:window.__sentinel++');
+    assert.equal(await page.locator('#review-host .lightmetal-insertion-popup button[type="submit"]').isDisabled(),true);
     const linkHTML = await page.evaluate(() => window.__editor.getHTML());
     await page.evaluate(() => {
       const preview = document.createElement("div");
@@ -425,8 +428,9 @@ async function runReview(engine, name, base) {
         document.getSelection().removeAllRanges();
         document.getSelection().addRange(range);
       });
-      page.once("dialog", (dialog) => dialog.accept("javascript:window.__sentinel++"));
       await page.locator('#review-host button[title="Link"]').click();
+      await page.locator('#review-host .lightmetal-insertion-popup').getByLabel('URL',{exact:true}).fill('javascript:window.__sentinel++');
+      await page.locator('#review-host .lightmetal-insertion-popup button[type="submit"]').click();
       result.linkHTML = await page.evaluate(() => window.__editor.getHTML());
       await page.evaluate(() => { window.__editor.content.contentEditable = "false"; });
       await page.locator("#review-host .lightmetal-content a").click();

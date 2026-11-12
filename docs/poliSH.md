@@ -130,6 +130,7 @@ const render = markdown => meltDown.parse(markdown, {
 
 const editor = maiden.init({
   element: document.getElementById('editor'),
+  sourceHighlight: highlighter.highlightTokens,
   preview: { render }
 });
 ```
@@ -137,10 +138,16 @@ const editor = maiden.init({
 MeltDown owns the code wrappers and `language-*` classes; poliSH returns their
 contents. The hook handles fenced and indented blocks, not inline code. Use
 `csharp` or `cs` for C# fences: MeltDown language tokens accept `+`, but not `#`.
-MaiDEn keeps its editable source and native history; highlighting affects preview
-and split output only. With `polish.css` loaded, default preview token colors
-follow the editor's mode and system changes without extra classes or an adapter.
-For a fixed palette, add `polish theme-NAME` to `.lightmarkdown-preview`.
+MaiDEn's optional `sourceHighlight` hook also colors fenced and inline code while
+you type. It paints tokens behind the editable text, preserving source and native
+history. Explicit fence labels win; unlabeled fences and inline code use guessing.
+Short or uncertain snippets may stay plain. Indented code blocks keep their usual
+source styling. Omit the hook to keep the existing behavior.
+
+With `polish.css` loaded, default source and preview colors follow the editor's
+mode and system changes. Source highlighting changes colors only, not typography.
+For a fixed preview palette, add `polish theme-NAME` to `.lightmarkdown-preview`.
+This source-highlighting API is available in lightmetal 0.7.0.
 
 MaiDEn preserves poliSH's fixed token classes but continues to remove inline
 styles. ANSI colors work in standalone output; ANSI text in MaiDEn remains readable
@@ -155,6 +162,7 @@ guessLanguage = true })` returns an isolated instance:
 | --- | --- |
 | `highlight(code, language)` | Synchronous HTML contents; callback-safe without binding. |
 | `highlightHTML(code, { language, strict })` | HTML with explicit strict-mode control. |
+| `highlightTokens(code, language)` | Synchronous `{ tokens, diagnostics }`; callback-safe, with the same guessing as `highlight`. |
 | `register(grammar)` | Compile and snapshot a native grammar; collisions throw. |
 | `hasLanguage(name)` | Check registered IDs/aliases and reserved rendering modes. |
 | `tokenize(code, { language, strict })` | `{ tokens, diagnostics }` for an explicit language. |
@@ -162,6 +170,12 @@ guessLanguage = true })` returns an isolated instance:
 Source must be a primitive string. Names are trimmed and case-insensitive.
 `ansi`, `plain`, and `text` are reserved. Strict mode exposes unknown languages
 and engine failures; it does not validate source syntax. Options are not mutated.
+
+`highlightTokens` returns a complete partition of the original UTF-16 source.
+Each token has `start`, `end`, `kind`, and `language`. It never consumes or rewrites
+text. Explicit `ansi` returns plain tokens rather than interpreting terminal
+controls. Use the HTML/ANSI APIs for terminal output. `tokenize` still requires an
+explicit language; its behavior has not changed.
 
 The core also exports `renderHTML`, `validateTokens`, `composeLanguage`, and
 `createLanguageLoader`. Tokens partition original UTF-16 source ranges exactly,

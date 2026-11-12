@@ -26,7 +26,25 @@ export function paintPreview(target, source) {
   while (cursor) { hide(cursor); cursor = cursor.nextSibling; }
 }
 
-/** Rebuild renderer output from an inert template. Never attach supplied nodes. */
+// Match the HTML editor's supported raster data types. URL checks do not
+// authenticate image bytes or prevent HTTP(S) tracking requests.
+function imageURL(value, base, origin) {
+  if (!value || /[\u0000-\u001f\u007f]/.test(value)) return null;
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  if (/^data:/i.test(trimmed)) {
+    if (!/^data:image\/(?:png|jpeg|gif|webp);base64,[a-z0-9+/]+={0,2}$/i.test(trimmed)) return null;
+    try { atob(trimmed.slice(trimmed.indexOf(',') + 1)); return trimmed; } catch { return null; }
+  }
+  try {
+    const url = new URL(trimmed, base);
+    if (["http:", "https:"].includes(url.protocol)) return url.href;
+    if (url.protocol === "blob:" && origin && origin !== "null" && url.origin === origin) return url.href;
+    return null;
+  } catch { return null; }
+}
+
+/** Rebuild renderer output from a template. Never attach supplied nodes. */
 export function previewHTML(document, html) {
   const template = document.createElement("template"); template.innerHTML = html;
   const allowed = new Set("p br hr h1 h2 h3 h4 h5 h6 strong b em i s del blockquote ul ol li pre code a table thead tbody tfoot tr th td span div dl dt dd sup sub".split(" "));
@@ -40,7 +58,23 @@ export function previewHTML(document, html) {
         target.append(document.createTextNode(node.hasAttribute("checked") ? "☑ " : "☐ ")); continue;
       }
       if (blocked.has(node.localName)) continue;
-      if (node.localName === "img") { target.append(document.createTextNode("[Image: " + (node.getAttribute("alt") || "image") + "]")); continue; }
+      if (node.localName === "img") {
+        const src = imageURL(node.getAttribute("src"), document.baseURI, document.location?.origin);
+        if (!src) { target.append(document.createTextNode("[Image: " + (node.getAttribute("alt") || "image") + "]")); continue; }
+        const image = document.createElement("img");
+        for (const attr of ["alt", "title"]) if (node.hasAttribute(attr)) image.setAttribute(attr, node.getAttribute(attr));
+        for (const attr of ["width", "height"]) {
+          const value = node.getAttribute(attr);
+          if (value && /^\d+$/.test(value) && Number(value) > 0 && Number(value) <= 4294967295) image.setAttribute(attr, String(Number(value)));
+        }
+        for (const [attr, values] of [["loading", ["lazy", "eager"]], ["decoding", ["async", "sync", "auto"]]]) {
+          const value = node.getAttribute(attr)?.trim().toLowerCase();
+          if (values.includes(value)) image.setAttribute(attr, value);
+        }
+        image.referrerPolicy = "no-referrer";
+        image.src = src;
+        target.append(image); continue;
+      }
       if (!allowed.has(node.localName)) { clean(node, target); continue; }
       const copy = document.createElement(node.localName);
       if (node.localName === "a") {

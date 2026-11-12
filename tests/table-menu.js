@@ -58,7 +58,7 @@ module.exports = async function tableMenuChecks(page, check) {
   await trigger.click(); await page.evaluate(() => __htmlMenu.setHTML('<p>Replacement</p>')); check('setHTML closes the menu', await menu.count() === 0);
   await prepare(); await trigger.click(); await host.getByRole('button', { name: 'Source', exact: true }).click();
   check('Source mode closes the menu and keeps table commands inert', await menu.count() === 0);
-  const source = await html(); await trigger.click(); check('Source cannot reopen the HTML menu', await menu.count() === 0 && await html() === source);
+  const source = await html(); check('Table disabled in Source',await trigger.isDisabled()); await trigger.evaluate(button=>button.click()); check('Source cannot reopen the HTML menu', await menu.count() === 0 && await html() === source);
   await host.getByRole('button', { name: 'Source', exact: true }).click();
   await prepare(); await page.setViewportSize({ width: 390, height: 480 }); await trigger.click();
   const bounds = await menu.boundingBox(); check('HTML menu fits a narrow viewport', bounds.x >= 0 && bounds.y >= 0 && bounds.x + bounds.width <= 391 && bounds.y + bounds.height <= 481);

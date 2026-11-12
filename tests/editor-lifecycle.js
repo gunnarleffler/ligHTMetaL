@@ -83,7 +83,7 @@ module.exports = async function editorLifecycleChecks(page, check) {
         const after = document.createElement('button'); after.id = 'html-entry-after'; after.textContent = 'After editor';
         state.accessible.element.before(before); state.accessible.element.after(after);
         state.accessible.setHTML('<p>Accessible editing</p>');
-        return { calls: state.stateCalls, pressed: Array.from(state.accessible.element.querySelectorAll('.lightmetal-actionbar button'), button => button.getAttribute('aria-pressed')) };
+        return { calls: state.stateCalls, pressed: Array.from(state.accessible.element.querySelectorAll('.lightmetal-actionbar button:not(.lightmetal-overflow-trigger)'), button => button.getAttribute('aria-pressed')) };
       });
       check(`${format}: stateful buttons start unpressed without extra state callbacks`,
         initialStates.calls === 0 && JSON.stringify(initialStates.pressed) === JSON.stringify(['false', 'false', 'false', 'false', null, 'false', 'false']));
@@ -96,7 +96,7 @@ module.exports = async function editorLifecycleChecks(page, check) {
       await page.keyboard.press('Tab');
       check(`${format}: forward Tab enters visual editing, not the toolbar`, await visual.evaluate(node => node === document.activeElement));
       await page.keyboard.press('Shift+Tab');
-      check(`${format}: Shift+Tab still reaches the toolbar from visual editing`, await accessible.getByRole('button', { name: 'Custom state', exact: true }).evaluate(node => node === document.activeElement));
+      check(`${format}: Shift+Tab still reaches the toolbar from visual editing`, await accessible.getByRole('button', { name: 'Overflow', exact: true }).evaluate(node => node === document.activeElement));
       await page.keyboard.press('Tab');
       check(`${format}: Tab returns from the last toolbar control to writing`, await visual.evaluate(node => node === document.activeElement));
       await page.keyboard.press('Tab');
@@ -121,9 +121,10 @@ module.exports = async function editorLifecycleChecks(page, check) {
         return [afterMouse - before, state.stateCalls - afterMouse];
       });
       check(`${format}: state callbacks still run once per existing refresh event`, callbackCounts.every(count => count === 1));
+      if (!await accessible.getByRole('button', { name: 'Custom state', exact: true }).isVisible()) await accessible.getByRole('button',{name:'Overflow',exact:true}).click();
       await accessible.getByRole('button', { name: 'Custom state', exact: true }).click();
       check(`${format}: custom state controls expose pressed state`,
-        await accessible.getByRole('button', { name: 'Custom state', exact: true }).getAttribute('aria-pressed') === 'true');
+        await accessible.getByRole('button', { name: 'Custom state', exact: true, includeHidden: true }).getAttribute('aria-pressed') === 'true');
       const sourceButton = accessible.getByRole('button', { name: 'Source', exact: true });
       await sourceButton.click();
       await page.locator('#html-entry-before').focus(); await page.keyboard.press('Tab');
@@ -330,7 +331,7 @@ module.exports = async function editorLifecycleChecks(page, check) {
           editor.element.querySelector('button[title="Image"]').click();
           const image = !!editor.element.querySelector('input[type="file"]');
           editor.element.querySelector('button[title="Table"]').click();
-          const dropdown = editor.element.querySelector('.lightmetal-table-dropdown');
+          const dropdown = editor.element.querySelector('.lightmetal-table-menu:not(.lightmetal-overflow)');
           const table = !!dropdown && !dropdown.hidden;
           editor.destroy();
           return { image, table };
@@ -364,7 +365,7 @@ module.exports = async function editorLifecycleChecks(page, check) {
 
       const omittedWorkflows = await page.evaluate(() => {
         const editor = window.__lifecycle.create({ actions: ['bold'] });
-        const buttons = Array.from(editor.element.querySelectorAll('.lightmetal-button'), (button) => button.title);
+        const buttons = Array.from(editor.element.querySelectorAll('.lightmetal-button:not(.lightmetal-overflow-trigger)'), (button) => button.title);
         editor.destroy();
         return buttons.length === 1 && buttons[0] === 'Bold';
       });

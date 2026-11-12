@@ -5,6 +5,7 @@
 
 import { groupToolbar } from "./toolbar-groups.js";
 import { previewHTML, paintPreview } from "./markdown-preview.js";
+import { createSourceHighlighter } from "./markdown-source-highlight.js";
 
 const isBlock = node => node.nodeType === 1 && /^(DIV|P)$/.test(node.tagName);
 const normalize = value => String(value ?? "").replace(/\r\n?/g, "\n");
@@ -2039,6 +2040,8 @@ export function init(settings = {}) {
   if (!element || element.nodeType !== 1 || element.ownerDocument !== document) throw new TypeError("element must be an element in this document.");
   if (onChange != null && typeof onChange !== "function") throw new TypeError("onChange must be a function.");
   if (mounted.has(element)) throw new TypeError("This element already has a Markdown editor.");
+  if (settings.sourceHighlight != null && typeof settings.sourceHighlight !== "function") throw new TypeError("sourceHighlight must be a function.");
+  const highlightSource = settings.sourceHighlight ? createSourceHighlighter(settings.sourceHighlight) : null;
   const previewRender = settings.preview?.render;
   if (settings.preview != null && (typeof settings.preview !== "object" || typeof previewRender !== "function")) throw new TypeError("preview.render must be a function.");
   const actions = resolveActions(settings.actions ?? (previewRender ? [...defaults.slice(0, -2), "preview", "side-by-side", "fullscreen", "guide"] : undefined));
@@ -2199,6 +2202,7 @@ export function init(settings = {}) {
     const model = owns(savedRange) ? textModel(content) : null;
     const value = model ? model.text : getMarkdown();
     const syntax = markdownTokens(value);
+    if (highlightSource && !highlightSource(value, syntax, () => !destroyed && version === renderVersion)) return;
     if (previewing) renderPreview(value);
     updateStatus(model || textModel(content), value);
     paintSource.paint(content, paint, syntax);
@@ -2335,6 +2339,72 @@ export function init(settings = {}) {
       }
     }
     return replace(plan.start, plan.end, plan.value, plan.anchor, plan.focus);
+  }
+  // Hit-test the real source glyphs, not the inert painter. A caret-from-point
+  // result alone can snap to a nearby line or blank space outside the marker.
+  function taskAtPoint(event) {
+    const caret = document.caretPositionFromPoint?.(event.clientX, event.clientY);
+    const fallback = !caret && document.caretRangeFromPoint?.(event.clientX, event.clientY);
+    const node = caret?.offsetNode || fallback?.startContainer;
+    if (!node || !content.contains(node)) return null;
+    const model = textModel(content), offset = model.offset(node, caret ? caret.offset : fallback.startOffset);
+    if (offset == null) return null;
+    // Ordinary caret clicks need no Markdown parse. This is only a cheap
+    // candidate check; the recognizer below still owns task classification.
+    if (!/\[[ \txX]\]/.test(model.text.slice(Math.max(0, offset - 3), offset + 3))) return null;
+    const syntax = markdownTokens(model.text), part = syntax[model.text.slice(0, offset).split("\n").length - 1];
+    const marker = part.taskMarker;
+    if (!marker || part.protected) return null;
+    const start = part.sourceStart + marker.start, end = part.sourceStart + marker.end;
+    const a = model.point(start), b = model.point(end), range = document.createRange();
+    range.setStart(a.node, a.offset); range.setEnd(b.node, b.offset);
+    if (!Array.from(range.getClientRects()).some(rect => event.clientX >= rect.left && event.clientX < rect.right &&
+      event.clientY >= rect.top && event.clientY < rect.bottom)) return null;
+    return { model, syntax, start, end };
+  }
+  let taskPointer = null;
+  const plainTaskClick = event => !event.defaultPrevented && event.button === 0 && !event.ctrlKey && !event.metaKey &&
+    !event.altKey && !event.shiftKey && !destroyed && !composing && !(previewing && !sideBySide);
+  function beginTaskClick(event) {
+    taskPointer = null;
+    if (!plainTaskClick(event) || event.detail > 1) return;
+    const hit = taskAtPoint(event);
+    if (!hit) return;
+    const selection = document.getSelection();
+    const owned = selection.rangeCount && owns(selection.getRangeAt(0));
+    taskPointer = { text: hit.model.text, start: hit.start, end: hit.end,
+      anchor: owned ? hit.model.offset(selection.anchorNode, selection.anchorOffset) : hit.end,
+      focus: owned ? hit.model.offset(selection.focusNode, selection.focusOffset) : hit.end,
+      x: event.clientX, y: event.clientY, version: renderVersion, view: previewVersion };
+    // Let native pointer selection run. Only a completed click toggles a task;
+    // dragging, modified clicks and composition keep their normal behavior.
+  }
+  function finishTaskClick(event) {
+    const snapshot = taskPointer;
+    taskPointer = null;
+    if (!snapshot || !plainTaskClick(event) || event.detail !== 1 || snapshot.version !== renderVersion || snapshot.view !== previewVersion ||
+      Math.hypot(event.clientX - snapshot.x, event.clientY - snapshot.y) > 4) return;
+    const hit = taskAtPoint(event);
+    if (!hit || hit.model.text !== snapshot.text || hit.start !== snapshot.start || hit.end !== snapshot.end) return;
+    const selection = document.getSelection();
+    // Chromium can retain a selected range when clicking inside it. Accept that
+    // unchanged range, but leave a newly dragged selection alone.
+    if (!selection.isCollapsed && (hit.model.offset(selection.anchorNode, selection.anchorOffset) !== snapshot.anchor ||
+      hit.model.offset(selection.focusNode, selection.focusOffset) !== snapshot.focus)) return;
+    const units = writingSelection("task-toggle", hit.model.text, hit.start, hit.end, hit.syntax);
+    const changes = writingChanges("task-toggle", hit.model.text, units, hit.syntax);
+    if (changes.length !== 1) return;
+    const [change] = changes;
+    event.preventDefault();
+    const anchor = snapshot.anchor ?? hit.end, focus = snapshot.focus ?? hit.end;
+    edit(() => {
+      replace(change.start, change.end, change.value, Math.min(anchor, focus), Math.max(anchor, focus));
+      if (!destroyed && anchor > focus) {
+        const model = textModel(content), a = model.point(anchor), b = model.point(focus);
+        document.getSelection().setBaseAndExtent(a.node, a.offset, b.node, b.offset);
+        remember();
+      }
+    });
   }
   function indent(unindent) {
     resetKeyboardHint();
@@ -2932,12 +3002,12 @@ export function init(settings = {}) {
       section("TLDR", "Write paragraphs with a blank line between them. Select text and use the toolbar, or type Markdown markers yourself. Preview, when configured, shows the rendered result.", "# A heading\n\nA paragraph with **bold** and *italic* text.");
       section("Emphasis", "Wrap text in matching markers.", "**bold**\n*italic*\n~~strikethrough~~");
       section("Headings", "Start a line with one to six hash marks and a space. More marks mean a smaller heading level.", "# Heading 1\n## Heading 2\n### Heading 3\n#### Heading 4\n##### Heading 5\n###### Heading 6");
-      section("Lists and tasks", "Use bullets or numbers for lists. Task markers add an unchecked or checked item. Enter continues a list; Enter on an empty item leaves one level.", "- First item\n- Second item\n\n1. First step\n2. Next step\n\n- [ ] To do\n- [x] Done");
+      section("Lists and tasks", "Use bullets or numbers for lists. Task markers add an unchecked or checked item. Click a source task marker to check or uncheck it; the preview stays read-only. Enter continues a list; Enter on an empty item leaves one level.", "- First item\n- Second item\n\n1. First step\n2. Next step\n\n- [ ] To do\n- [x] Done");
       section("Links", "Put the label in brackets and the destination in parentheses.", "[Visit the example](https://example.com)");
       section("Quotes", "Start each quoted line with > and a space.", "> A quoted thought.\n> Continued on another line.");
       section("Images", "The text in brackets describes the image. Use a URL or a relative path; this editor does not upload files or fetch images while you edit source.", "![A fox beside a tree](images/fox.png)");
       section("Tables", "Separate cells with pipes and put a dash row below the header. Spaces do not need to line up. Colons in the dash row set left, center, or right alignment.", "| Name | Notes |\n| --- | --- |\n| Fox | In the woods |\n| Owl | Near the barn |\n\n| Left | Center | Right |\n| :--- | :---: | ---: |\n| A | B | C |");
-      section("Code", "Use backticks for inline code. For a code block, put triple backticks on their own lines. An optional language name can help a configured preview renderer highlight code.", '`inline code`\n\n```javascript\nconst greeting = "Hello";\n```');
+      section("Code", "Use backticks for inline code. For a code block, put triple backticks on their own lines. An optional language name selects code colors when source highlighting or a preview highlighter is configured.", '`inline code`\n\n```javascript\nconst greeting = "Hello";\n```');
       section("Paragraphs and rules", "Leave a blank line between paragraphs. Put --- on a separate line with blank lines around it for a horizontal rule, not a heading underline.", "First paragraph.\n\nSecond paragraph.\n\n---\n\nAfter the rule.");
       section("Literal markers", "Put a backslash before punctuation when you want the marker itself, not formatting.", "\\*literal asterisks\\*");
       const editing = document.createElement("p"); editing.textContent = "Link inserts a template with its URL selected. Image inserts a template, uses selected text as its URL, or selects an existing inline image’s URL. Table opens insertion, formatting, row, column, and alignment controls. Format Table lines up source columns with spaces. Edit image descriptions and table text directly in the source.";
@@ -3146,6 +3216,12 @@ export function init(settings = {}) {
     listen(node, "pointerdown", resetKeyboardHint);
     listen(node, "mousedown", resetKeyboardHint);
   }
+  listen(content, "pointerdown", beginTaskClick);
+  listen(content, "pointermove", event => {
+    if (taskPointer && Math.hypot(event.clientX - taskPointer.x, event.clientY - taskPointer.y) > 4) taskPointer = null;
+  });
+  for (const type of ["pointerleave", "pointercancel", "contextmenu"]) listen(content, type, () => { taskPointer = null; });
+  listen(content, "click", finishTaskClick);
   listen(content, "input", () => { emptyFormat = null; resetKeyboardHint(); render(); });
   listen(content, "compositionstart", () => { closeTableUI(); emptyFormat = null; resetKeyboardHint(); composing = true; element.classList.add("lightmarkdown-composing"); updateButtons(); });
   listen(content, "compositionend", () => { composing = false; element.classList.remove("lightmarkdown-composing"); render(); });

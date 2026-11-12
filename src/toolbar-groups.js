@@ -1,8 +1,8 @@
 /** Shared default-toolbar organization. Explicit action lists stay application-owned. */
 const groups = [
-  ['bold', 'italic', 'underline', 'strikethrough'],
-  ['heading1', 'heading2', 'paragraph'],
-  ['quote', 'ulist', 'olist'],
+  ['bold', 'italic', 'underline', 'strikethrough', 'script', 'font', 'formatting'],
+  ['headings', 'heading1', 'heading2', 'paragraph'],
+  ['quote', 'ulist', 'olist', 'indentation', 'alignment'],
   ['code', 'codeblock'],
   ['line', 'link', 'image', 'table'],
   ['undo', 'redo'],

@@ -4,13 +4,14 @@
 
 # ligHTMetaL
 
-Two editors. A parser. A syntax highlighter. Your content.
+Two text editors. A sketch editor. A parser. A syntax highlighter. Your content.
 Vanilla JavaScript and CSS. Zero runtime dependencies.
 
 - **[ligHTMetaL](#quickstart-cdn)** edits rich HTML, with images, tables, and source mode.
 - **[ligHTMetaL::MaiDEn](#markdown-editing-with-maiden)** edits styled Markdown source, with preview and split views.
 - **[ligHTMetaL::MeltDown](#markdown-parsing-with-meltdown)** turns Markdown into HTML in browsers and Node.js.
 - **[ligHTMetaL::poliSH](#syntax-highlighting-with-polish)** highlights code in 49 languages, with eleven color themes.
+- **[ligHTMetaL::Etch](#sketching-with-etch)** draws layered sketches, with image import and PNG/SVG export.
 
 Use each library on its own, or combine MaiDEn, MeltDown, and poliSH for a complete
 Markdown workflow. Both editors offer configurable toolbars, seven optional skins,
@@ -28,16 +29,15 @@ light and dark themes, and browser-native undo/redo.
 Self-host the assets for offline use. Your application decides where documents
 are saved and whether files are uploaded.
 
-This README documents **0.6.0**. Version **0.4.0** contains only the HTML editor
-and its skins; 0.6.0 brings all four libraries together.
+The quickstarts below pin **lightmetal 0.7.0**.
 
 ## Quickstart: CDN
 
 No build step needed. Load the HTML editor's CSS and JavaScript from jsDelivr:
 
 ```html
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/lightmetal@0.6.0/dist/lightmetal.min.css">
-<script src="https://cdn.jsdelivr.net/npm/lightmetal@0.6.0/dist/lightmetal.min.js"></script>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/lightmetal@0.7.0/dist/lightmetal.min.css">
+<script src="https://cdn.jsdelivr.net/npm/lightmetal@0.7.0/dist/lightmetal.min.js"></script>
 
 <div id="editor" class="lightmetal"></div>
 <script>
@@ -51,7 +51,7 @@ No build step needed. Load the HTML editor's CSS and JavaScript from jsDelivr:
 
 jsDelivr serves public npm packages automatically. Its URL pattern is
 `https://cdn.jsdelivr.net/npm/lightmetal@VERSION/PATH`.
-Use `@0.6.0` to pin a release, or `@latest` to follow npm's latest release.
+Use `@0.7.0` to pin this version, or `@latest` to follow npm's latest release.
 Updates to `@latest` can take time to appear because of caching. Pin JavaScript
 and CSS versions in applications; this README's logo uses `@latest`.
 
@@ -61,7 +61,7 @@ URLs. Standalone builds also work over `file://`.
 ## Install with npm
 
 ```bash
-npm install lightmetal --ignore-scripts
+npm install lightmetal@0.7.0 --ignore-scripts
 ```
 
 The package includes ready-built assets and has no install hooks. With a bundler:
@@ -85,10 +85,10 @@ MaiDEn keeps Markdown markers visible while styling your source. It shares the
 HTML editor's CSS and skins, but loads no HTML-editor JavaScript.
 
 ```html
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/lightmetal@0.6.0/dist/lightmetal.min.css">
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/lightmetal@0.6.0/dist/maiden.min.css">
-<script src="https://cdn.jsdelivr.net/npm/lightmetal@0.6.0/dist/MeltDown.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/lightmetal@0.6.0/dist/maiden.min.js"></script>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/lightmetal@0.7.0/dist/lightmetal.min.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/lightmetal@0.7.0/dist/maiden.min.css">
+<script src="https://cdn.jsdelivr.net/npm/lightmetal@0.7.0/dist/MeltDown.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/lightmetal@0.7.0/dist/maiden.min.js"></script>
 
 <div id="markdown" class="lightmetal"></div>
 <script>
@@ -103,6 +103,10 @@ HTML editor's CSS and skins, but loads no HTML-editor JavaScript.
 
 MeltDown enables Preview and Side-by-side. Omit it and the `preview` option for
 source-only editing. Help and Fullscreen work without a renderer.
+
+Click a task's `[ ]` or `[x]` marker in the source
+to toggle it. Each click is one native Undo step. The source half of split view
+works the same way; the HTML preview stays read-only.
 
 For bundlers, import `init` from `lightmetal/dist/maiden.esm.js` and `parse` from
 `lightmetal/dist/MeltDown.esm.js`, along with the two stylesheets.
@@ -127,7 +131,7 @@ preview—no editor required.
 ### Quickstart: CDN
 
 ```html
-<script src="https://cdn.jsdelivr.net/npm/lightmetal@0.6.0/dist/MeltDown.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/lightmetal@0.7.0/dist/MeltDown.min.js"></script>
 
 <div id="document"></div>
 <script>
@@ -167,8 +171,8 @@ or parser required.
 ### Quickstart: CDN
 
 ```html
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/lightmetal@0.6.0/dist/polish.min.css">
-<script src="https://cdn.jsdelivr.net/npm/lightmetal@0.6.0/dist/polish.min.js"></script>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/lightmetal@0.7.0/dist/polish.min.css">
+<script src="https://cdn.jsdelivr.net/npm/lightmetal@0.7.0/dist/polish.min.js"></script>
 
 <pre class="code theme-dark"><code id="code"></code></pre>
 <script>
@@ -215,6 +219,48 @@ Add `dist/MeltDown.min.js` to the poliSH browser quickstart above. Apply
 `polish theme-dark` (or another theme) to the container displaying the result.
 The same rendering hook adds code colors to MaiDEn's preview and split views.
 
+You can also color fenced and inline code
+while editing. Load `polish.css`, then add this option to `maiden.init()`:
+
+```js
+const editor = maiden.init({
+  element: document.getElementById('markdown'),
+  sourceHighlight: highlighter.highlightTokens
+});
+```
+
+Fence labels select the language. Unlabeled fences and inline code use poliSH's
+conservative guesser. Colors appear as you type, without changing your source or
+native Undo. The hook works with or without Preview. See the
+[MaiDEn reference](docs/reference.md#optional-live-code-colors) for the contract.
+
+## Sketching with Etch
+
+**ligHTMetaL::Etch — Leave your mark.** Draw with Pen, Highlighter, shapes,
+and an eraser. Work with layers, import images or supported SVG vectors, and
+export PNG, SVG, or native JSON. Your application owns saving and storage.
+
+Etch is independent of the text editors, parser, and highlighter. From this
+checkout, run `npm run build` and load its assets:
+
+```html
+<link rel="stylesheet" href="dist/etch.css">
+<div id="drawing" style="height:400px"></div>
+<script src="dist/etch.js"></script>
+<script>
+  const editor = etch.createEtch(document.getElementById('drawing'));
+  editor.on('change', () => console.log(editor.save()));
+  // await editor.load(snapshot);
+  // editor.destroy();
+</script>
+```
+
+For modules, import `createEtch` from `dist/etch.esm.js`. Etch has its own drawing
+history; it does not use the text editors' native undo. Try
+`examples/etch/index.html` over HTTP. See the [Etch guide](docs/Etch.md) for the
+API, imports, resource limits, and unverified device/accessibility behavior.
+Etch has not completed v1 acceptance.
+
 ## Themes that fit together
 
 Set one mode on a page, section, or component. Editors and highlighted code follow
@@ -243,11 +289,35 @@ document: set the mode inside that document too.
   images, tables, skins, preview, iframe integration, and browser limits.
 - [MeltDown guide](docs/MeltDown.md): parser API, supported syntax, and hooks.
 - [poliSH guide](docs/poliSH.md): languages, themes, selective imports, and ANSI.
+- [Etch guide](docs/Etch.md): drawing, layers, imports, exports, and embedding.
 - [Changelog](CHANGELOG.md).
 
-The checkout's `examples/index.html` showcases all four libraries. Detail pages
+The checkout's `examples/index.html` introduces all five libraries, including
+Etch's standalone sketch demo. Detail pages
 are `html.html`, `markdown.html`, `meltdown.html`, and `polish.html` in `examples/`.
 Compare skins in `skins.html` and `markdown-skins.html`.
+The Markdown demos open an editable showcase document: try its task checkboxes,
+change the code, or compare the source with Preview. Skin cards and the iframe
+use a shorter version of the same idea.
+
+## React and Vue
+
+Version 0.7.0 includes optional adapter files in the main package:
+
+```js
+import { LightmetalEditor, MaidenEditor } from 'lightmetal/adapters/react/index.js';
+// Or: import { LightmetalEditor, MaidenEditor } from 'lightmetal/adapters/vue/index.js';
+```
+
+Both offer an initial value, native options, change notifications, and instance
+access. They leave native editing and Undo alone. React and Vue are optional
+peers: install only your framework. Bare-JS users need neither. This checkout uses
+them as development dependencies for tests and optional demos.
+
+See the [framework guide](docs/frameworks.md) for installation, refs,
+mount-only options, SSR, and styling. No separate adapter package is needed.
+Run `npm run build:framework-examples` to build the local React and Vue demos in
+`examples/frameworks/`. No framework code is loaded by the main gallery.
 
 ## Content safety and browser support
 
@@ -270,19 +340,28 @@ npm run build
 ```
 
 Open `examples/index.html` with the tracked bundles, or run the optional local
-server (Python 3.14+, uv, and Flask):
+server (Node.js, no additional dependencies):
 
 ```bash
-uv sync --frozen
-uv run python examples/server.py
+npm run dev
 ```
+
+The server uses tracked bundles; run `npm run build` after source changes.
+It binds to `0.0.0.0`, allowing access from other devices on your network.
+Use `PORT=5001 npm run dev` for another port, or `HOST=127.0.0.1 npm run dev`
+to restrict access to this computer.
 
 Visit `http://localhost:5000/`. Tests use the existing global Playwright setup:
 
 ```bash
 npm test
+npm run test:release-docs
 npm run test:package
 ```
+
+The release-docs check scans the documentation npm ships for stale lightmetal
+versions. Pass a `.tgz` path to check an exact archive instead of the checkout.
+Changelog history keeps its original versions.
 
 See [development and tests](docs/reference.md#development-and-tests) for setup,
 focused commands, and optional diagnostics.
@@ -301,7 +380,7 @@ We wanted something simpler: editors, Markdown parsing, and syntax highlighting
 that we could understand, self-host, and keep using. No telemetry. No accounts.
 No runtime dependency tree. No build step just to get started.
 
-That became four independent libraries, built around everyday features and
+That became a suite of independent libraries, built around everyday features and
 sensible defaults. Use the parts you need. Your application keeps control of its
 content, storage, and presentation.
 
@@ -314,4 +393,4 @@ things with.
 
 ## License
 
-MIT. See [LICENSE](LICENSE). Inspired by [Pell](https://github.com/jaredreich/pell).
+MIT. See [LICENSE](LICENSE).

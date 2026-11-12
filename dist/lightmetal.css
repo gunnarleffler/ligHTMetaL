@@ -37,6 +37,36 @@
   overflow: hidden;
 }
 
+/* Keep the same positioned block in both layouts. Switching to fixed/absolute
+ * positioning or rebuilding scroll frames can reset Firefox textarea Undo. */
+.lightmetal.lightmetal-html { position: relative; }
+.lightmetal.lightmetal-html[hidden] { display: none; }
+
+/* In-page fullscreen keeps the writing nodes and their native history intact. */
+/* clip locks page scrolling without rebuilding Firefox's root scroll frame. */
+html.lightmetal-page-fullscreen { overflow: clip; }
+.lightmetal.lightmetal-fullscreen {
+  /* Override embedded sizing without rewriting application-owned inline styles. */
+  z-index: 2147483646;
+  translate: var(--lightmetal-fullscreen-x, 0px) var(--lightmetal-fullscreen-y, 0px);
+  width: 100vw !important;
+  height: 100dvh !important;
+  min-width: 0 !important;
+  min-height: 0 !important;
+  max-width: none !important;
+  max-height: none !important;
+  margin: 0 !important;
+  border-radius: 0;
+  background: var(--lightmetal-bg);
+}
+.lightmetal.lightmetal-fullscreen > .lightmetal-fullscreen-surface {
+  width: 100%;
+  height: var(--lightmetal-fullscreen-writing-height, 300px) !important;
+  min-height: 0;
+  overflow: auto;
+}
+.lightmetal.lightmetal-fullscreen > .lightmetal-fullscreen-surface[hidden] { display: none; }
+
 /* Existing host-level pins also pass their mode to nested highlighted code. */
 .lightmetal.lightmetal-light { --lightmetal-color-scheme: light; }
 .lightmetal.lightmetal-dark { --lightmetal-color-scheme: dark; }
@@ -108,9 +138,55 @@
   height: 18px;
 }
 
+/* HTML-only refresh. MaiDEn retains its existing toolbar geometry. */
+.lightmetal.lightmetal-html .lightmetal-actionbar { overflow: hidden; align-items: center; min-width: 0; }
+.lightmetal.lightmetal-html .lightmetal-actionbar > .lightmetal-button { width: 36px; height: 36px; font-size: 18px; }
+.lightmetal.lightmetal-html .lightmetal-button svg { width: 20px; height: 20px; }
+.lightmetal.lightmetal-html .lightmetal-button[hidden] { display: none; }
+.lightmetal.lightmetal-html .lightmetal-actionbar > .lightmetal-overflow-trigger { flex-shrink: 1; min-width: 0; }
+.lightmetal.lightmetal-html .lightmetal-actionbar > .lightmetal-group-start { position: relative; margin-left: 8px; }
+.lightmetal.lightmetal-html .lightmetal-actionbar > .lightmetal-group-start::before { content: ''; position: absolute; left: -5px; height: 18px; border-left: 1px solid var(--lightmetal-border); }
+.lightmetal.lightmetal-html .lightmetal-overflow .lightmetal-group-start { margin-left: 0; }
+.lightmetal.lightmetal-html .lightmetal-actionbar > .lightmetal-button[aria-haspopup]:not(.lightmetal-overflow-trigger)::after { content: ''; width: 4px; height: 4px; margin-left: 3px; border-right: 1px solid currentColor; border-bottom: 1px solid currentColor; transform: rotate(45deg); }
+.lightmetal.lightmetal-html .lightmetal-button[aria-expanded="true"] { background: var(--lightmetal-accent-soft); color: var(--lightmetal-accent); }
+.lightmetal.lightmetal-html .lightmetal-table-menu button { min-height: 36px; }
+.lightmetal.lightmetal-html .lightmetal-format-popup button > span { display: inline-flex; vertical-align: middle; margin-right: 10px; }
+.lightmetal.lightmetal-html .lightmetal-format-popup button svg { width: 20px; height: 20px; }
+.lightmetal.lightmetal-html .lightmetal-menu-label { padding: 10px; border-top: 1px solid var(--lightmetal-border); color: var(--lightmetal-color-dim); }
+.lightmetal.lightmetal-html .lightmetal-emoji-grid { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); }
+.lightmetal.lightmetal-html .lightmetal-emoji-grid button { font-size: 22px; text-align: center; }
+.lightmetal.lightmetal-html .lightmetal-button:disabled { opacity: .4; cursor: default; }
+.lightmetal.lightmetal-html .lightmetal-button:disabled:hover { background: transparent; color: var(--lightmetal-color-dim); }
+.lightmetal.lightmetal-html .lightmetal-overflow .lightmetal-button { width: 100%; height: 36px; justify-content: flex-start; gap: 10px; }
+.lightmetal.lightmetal-html .lightmetal-overflow .lightmetal-button::after { content: attr(aria-label); font-size: 14px; }
+@media (pointer: coarse) {
+  .lightmetal.lightmetal-html .lightmetal-actionbar > .lightmetal-button { width: 44px; height: 44px; }
+  .lightmetal.lightmetal-html :is(.lightmetal-table-menu,.lightmetal-overflow) button { min-height: 44px; }
+}
+
+/* Link and Image forms share the toolbar's local theme and popover surface. */
+.lightmetal .lightmetal-table-dropdown.lightmetal-insertion-popup { width: 320px; font-size: 14px; }
+.lightmetal .lightmetal-insertion-popup h3 { margin: 0 0 12px; font-size: 15px; }
+.lightmetal .lightmetal-insertion-popup label { display: grid; gap: 5px; margin: 10px 0; }
+.lightmetal .lightmetal-insertion-popup input[type="text"] { box-sizing: border-box; width: 100%; min-width: 0; min-height: 36px; padding: 7px 9px; border: 1px solid var(--lightmetal-border); border-radius: 5px; background: var(--lightmetal-bg); color: inherit; font: inherit; }
+.lightmetal .lightmetal-insertion-popup .lightmetal-insertion-check { display: flex; align-items: center; gap: 8px; }
+.lightmetal .lightmetal-insertion-popup button { min-height: 36px; padding: 7px 10px; border: 1px solid var(--lightmetal-border); border-radius: 5px; background: var(--lightmetal-bg-toolbar); color: inherit; font: inherit; cursor: pointer; }
+.lightmetal .lightmetal-insertion-popup button:enabled:hover,
+.lightmetal .lightmetal-insertion-popup button[aria-selected="true"] { background: var(--lightmetal-accent-soft); }
+.lightmetal .lightmetal-insertion-popup :is(button,input):focus-visible { outline: 2px solid var(--lightmetal-accent); outline-offset: -2px; }
+.lightmetal .lightmetal-insertion-popup button:disabled { opacity: .45; cursor: default; }
+.lightmetal .lightmetal-insertion-footer { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; margin-top: 14px; }
+.lightmetal .lightmetal-insertion-tabs { display: flex; gap: 6px; margin-bottom: 12px; }
+.lightmetal .lightmetal-insertion-popup .lightmetal-image-dropzone { width: 100%; min-height: 110px; padding: 20px; border-style: dashed; }
+.lightmetal .lightmetal-insertion-error { margin: 10px 0 0; color: var(--lightmetal-color); font-weight: 600; }
+.lightmetal .lightmetal-insertion-popup [hidden] { display: none; }
+@media (pointer: coarse) {
+  .lightmetal .lightmetal-insertion-popup :is(button,input[type="text"]) { min-height: 44px; }
+}
+
 /* Table insertion dropdown. Popover support lifts it above clipped hosts. */
 
-.lightmetal .lightmetal-table-dropdown {
+.lightmetal :is(.lightmetal-table-dropdown,.lightmetal-toolbar-popup) {
   position: fixed;
   inset: auto;
   margin: 0;
@@ -128,8 +204,8 @@
   font-size: 13px;
 }
 
-.lightmetal .lightmetal-table-menu { width: 240px; padding: 6px; }
-.lightmetal-table-menu button {
+.lightmetal :is(.lightmetal-table-menu,.lightmetal-overflow) { width: 240px; padding: 6px; }
+.lightmetal :is(.lightmetal-table-menu,.lightmetal-overflow) button {
   display: block;
   box-sizing: border-box;
   width: 100%;
@@ -142,13 +218,19 @@
   text-align: left;
   cursor: pointer;
 }
-.lightmetal-table-menu button:enabled:hover,
-.lightmetal-table-menu button:focus-visible { background: var(--lightmetal-accent-soft); }
-.lightmetal-table-menu button:disabled { opacity: .4; cursor: default; }
-.lightmetal-table-menu button[aria-checked="true"] { background: var(--lightmetal-accent-soft); font-weight: 600; }
-.lightmetal-table-menu [role="separator"] { margin: 5px 4px; border-top: 1px solid var(--lightmetal-border); }
+.lightmetal :is(.lightmetal-table-menu,.lightmetal-overflow) button:enabled:hover,
+.lightmetal :is(.lightmetal-table-menu,.lightmetal-overflow) button:focus-visible { background: var(--lightmetal-accent-soft); }
+.lightmetal :is(.lightmetal-table-menu,.lightmetal-overflow) button:disabled { opacity: .4; cursor: default; }
+.lightmetal :is(.lightmetal-table-menu,.lightmetal-overflow) button[aria-checked="true"] { background: var(--lightmetal-accent-soft); font-weight: 600; }
+.lightmetal :is(.lightmetal-table-menu,.lightmetal-overflow) [role="separator"] { margin: 5px 4px; border-top: 1px solid var(--lightmetal-border); }
 
-.lightmetal .lightmetal-table-dropdown[hidden] {
+.lightmetal-format-popup label { display: grid; gap: 5px; padding: 8px; }
+.lightmetal-format-popup select { width: 100%; min-height: 32px; font: inherit; color: inherit; background: var(--lightmetal-bg); border: 1px solid var(--lightmetal-border); border-radius: 4px; }
+.lightmetal-format-popup .lightmetal-color-field { display: flex; align-items: center; gap: 4px; padding: 5px; }
+.lightmetal-format-popup input[type="color"] { flex: 0 0 40px; width: 40px; height: 32px; padding: 2px; border: 1px solid var(--lightmetal-border); background: var(--lightmetal-bg); }
+.lightmetal-format-popup :is(button,select,input):focus-visible { outline: 2px solid var(--lightmetal-accent); outline-offset: -2px; }
+
+.lightmetal :is(.lightmetal-table-dropdown,.lightmetal-toolbar-popup)[hidden] {
   display: none;
 }
 
@@ -316,6 +398,8 @@
   border: none;
   outline: none;
   resize: none;
+  /* Keep the scroll frame stable when fullscreen changes the field's height. */
+  overflow: auto;
   font-family: ui-monospace, "Cascadia Mono", "SF Mono", Menlo, Consolas, monospace;
   font-size: 13px;
   line-height: 1.5;

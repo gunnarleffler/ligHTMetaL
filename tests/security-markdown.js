@@ -5,9 +5,9 @@ const assert = require('node:assert/strict');
 
 async function markdownSecurityChecks(browser, base, payloads) {
   const page = await browser.newPage();
-  const requests = [], errors = [];
+  const requests = [], errors = [], approvedImages = new Set();
   let monitor = false;
-  page.on('request', request => { if (monitor) requests.push(request.url()); });
+  page.on('request', request => { if (monitor) requests.push({ url: request.url(), type: request.resourceType() }); });
   page.on('pageerror', error => errors.push(error.message));
   // Payloads must not reach external services, even if a regression loads them.
   await page.route('**/*', route => !monitor && route.request().url().startsWith(base + '/')
@@ -32,11 +32,22 @@ async function markdownSecurityChecks(browser, base, payloads) {
       window.__reviewInspect = (root, syntaxOnly = false) => {
         const violations = [];
         const allowed = new Set((syntaxOnly ? 'span' :
-          'p br hr h1 h2 h3 h4 h5 h6 strong b em i s del blockquote ul ol li pre code a table thead tbody tfoot tr th td span div dl dt dd sup sub').split(' '));
+          'p br hr h1 h2 h3 h4 h5 h6 strong b em i s del blockquote ul ol li pre code a img table thead tbody tfoot tr th td span div dl dt dd sup sub').split(' '));
         for (const el of root.querySelectorAll('*')) {
           if (!allowed.has(el.localName) || el.namespaceURI !== 'http://www.w3.org/1999/xhtml') violations.push(el.outerHTML);
           for (const attr of el.attributes) {
-            if (!(syntaxOnly ? ['class', 'style'] : ['href', 'target', 'rel', 'class', 'hidden']).includes(attr.name)) violations.push(attr.name);
+            const attrs = syntaxOnly ? ['class', 'style'] : ['href', 'target', 'rel', 'class', 'hidden',
+              ...(el.localName === 'img' ? ['src', 'alt', 'title', 'width', 'height', 'loading', 'decoding', 'referrerpolicy'] : [])];
+            if (!attrs.includes(attr.name)) violations.push(attr.name);
+            if (el.localName === 'img' && attr.name === 'src') {
+              const url = new URL(attr.value, document.baseURI);
+              const sameOriginBlob = url.protocol === 'blob:' && location.origin !== 'null' && url.origin === location.origin;
+              if (!['http:', 'https:'].includes(url.protocol) && !sameOriginBlob && !/^data:image\/(png|jpeg|gif|webp);base64,[a-z0-9+/]+={0,2}$/i.test(attr.value)) violations.push(attr.value);
+            }
+            if (el.localName === 'img' && ['width', 'height'].includes(attr.name) &&
+              (!/^\d+$/.test(attr.value) || Number(attr.value) < 1 || Number(attr.value) > 4294967295)) violations.push(attr.name);
+            if (el.localName === 'img' && attr.name === 'loading' && !['lazy', 'eager'].includes(attr.value)) violations.push(attr.name);
+            if (el.localName === 'img' && attr.name === 'decoding' && !['async', 'sync', 'auto'].includes(attr.value)) violations.push(attr.name);
             if (attr.name === 'href' && !['http:', 'https:', 'mailto:'].includes(new URL(attr.value, document.baseURI).protocol)) violations.push(attr.value);
             if (attr.name === 'style') {
               for (const property of el.style) {
@@ -44,6 +55,7 @@ async function markdownSecurityChecks(browser, base, payloads) {
               }
             }
           }
+          if (el.localName === 'img' && el.referrerPolicy !== 'no-referrer') violations.push('image referrer policy');
           if (el.localName === 'a' && el.hasAttribute('href') && (el.target !== '_blank' || el.rel !== 'noopener noreferrer')) violations.push('link isolation');
           for (const event of ['click', 'mouseover', 'focus', 'load', 'error']) el.dispatchEvent(new Event(event));
         }
@@ -64,7 +76,7 @@ async function markdownSecurityChecks(browser, base, payloads) {
       if (view === 'Side-by-side') await page.getByRole('button', { name: view, exact: true }).click();
       for (const [label, html] of corpus) {
         // A renderer can return arbitrary HTML, including trusted hook output.
-        // Neither path may bypass MaiDEn's separate inert preview filter.
+        // Neither path may bypass MaiDEn's separate preview filter.
         for (const route of ['renderer', 'highlight-hook']) {
           const result = await page.evaluate(async ({ html, route }) => {
             window.__reviewRender = route === 'renderer' ? () => html :
@@ -84,8 +96,10 @@ async function markdownSecurityChecks(browser, base, payloads) {
             violations.push(...window.__reviewInspect(copy)); copy.remove();
             return { violations, executions: window.__sentinel,
               changes: window.__reviewChanges, source: window.__markdownReview.getMarkdown(),
-              sameNode: window.__markdownReview.content.firstChild === window.__sourceNode };
+              sameNode: window.__markdownReview.content.firstChild === window.__sourceNode,
+              images: Array.from(root.querySelectorAll('img'), image => image.src) };
           });
+          checked.images.forEach(url => approvedImages.add(url)); delete checked.images;
           assert.deepEqual(checked, { violations: [], executions: 0, changes: result.changes,
             source: result.source, sameNode: true }, `${view}/${route}/${label}`);
           previewCases++;
@@ -185,7 +199,8 @@ async function markdownSecurityChecks(browser, base, payloads) {
       return window.__sentinel;
     });
     assert.equal(bypass, 2);
-    assert.deepEqual(requests, [], 'Preview/parser/highlighter output must not load payload resources');
+    assert.deepEqual(requests.filter(request => request.type !== 'image' || !approvedImages.has(request.url)), [],
+      'Only validated preview image sources may request resources');
     assert.deepEqual(errors, []);
     return { previewCases, renderingCases: rendered.cases, destinationCases: destinations.cases,
       sourceCases: corpus.length * 3 };

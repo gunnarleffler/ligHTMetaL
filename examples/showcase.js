@@ -1,6 +1,6 @@
 // Accessible tabs. Hidden editors keep their source and native history intact.
 const tabs = [...document.querySelectorAll('[role="tab"]')];
-let loadReadme;
+let loadReadme, loadEtch;
 function activate(index, focus = false) {
   tabs.forEach((tab, i) => {
     tab.setAttribute('aria-selected', String(i === index));
@@ -9,6 +9,7 @@ function activate(index, focus = false) {
   });
   if (focus) tabs[index].focus();
   if (tabs[index].id === 'tab-readme') loadReadme?.();
+  if (tabs[index].id === 'tab-etch') loadEtch?.();
 }
 tabs.forEach((tab, index) => {
   tab.addEventListener('click', () => activate(index));
@@ -22,6 +23,15 @@ tabs.forEach((tab, index) => {
   });
 });
 
+const sketchHost = document.getElementById('sketch-editor');
+if (sketchHost) {
+  let editor;
+  // Mount once, at its visible size. Tab changes retain artwork and drawing history.
+  loadEtch = () => {
+    if (!editor) editor = etch.createEtch(sketchHost);
+  };
+}
+
 const htmlHost = document.getElementById('html-editor');
 if (htmlHost) {
   const output = document.getElementById('html-output');
@@ -31,9 +41,10 @@ if (htmlHost) {
 const markdownHost = document.getElementById('made-editor');
 if (markdownHost) {
   const output = document.getElementById('markdown-output');
-  const editor = maiden.init({ element: markdownHost, preview: { render: polishDemo.render },
+  const editor = maiden.init({ element: markdownHost, sourceHighlight: polishDemo.highlighter.highlightTokens, preview: { render: polishDemo.render },
     onChange: text => { exampleCode.write(output, text, 'markdown'); } });
-  editor.setMarkdown('# Keep the source.\n\nMake **your words** count. Try Preview or Side-by-side.\n\n- Local-first\n- Native undo\n- Your content\n\n```js\nconst message = "A little poliSH.";\n```');
+  editor.setMarkdown(markdownSamples.full);
+  markdownDemo.startSplit(editor);
 }
 let renderParserPreview, renderReadmePreview;
 const themeButton = document.getElementById('theme-toggle');

@@ -63,8 +63,8 @@ Preserve the existing architecture:
 - The documented normal, raw, unrestricted, and Source-mode trust boundaries.
 
 Do not introduce frameworks, TypeScript, sanitizer dependencies, architecture
-layers, or new tooling just for cleanup. Preserve the MIT license and Pell
-inspiration credit. See `PROJECT_NOTES.md` and `../README.md` for current
+layers, or new tooling just for cleanup. Preserve the MIT license.
+See [project notes](../PROJECT_NOTES.md) and [README](../../README.md) for current
 behavior and constraints. Use `security-review.md` for a dedicated security
 review; a cleanup pass is not a security audit.
 

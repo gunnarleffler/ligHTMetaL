@@ -1,5 +1,67 @@
 # Changelog
 
+## 0.7.0
+
+- Added optional React and Vue 3 text-editor adapters inside the lightmetal package.
+  Both expose LightmetalEditor and MaidenEditor with mount-only initialization,
+  change notifications, native instance access, SSR/hydration and cleanup. Native
+  editing/history stays under library control. React/Vue are optional peers;
+  bare-JS consumers install neither framework.
+
+- Added optional live poliSH colors to editable Markdown through `sourceHighlight`
+  and the source-preserving `highlightTokens()` API. Complete fenced/inline code
+  snippets retain multiline context; invalid results fall back to plain code.
+
+- Made recognized source task markers clickable, including in split view. A toggle
+  preserves selection and uses one native edit/Undo step. Preview stays read-only.
+
+- Added a shared editable Markdown showcase and local React/Vue demos with parent
+  updates, native Undo, live output and optional rendering/highlighting hooks.
+
+- Replaced HTML Link/Image prompts with themed popovers. Link supports insertion,
+  editing, new-tab settings, and native removal while retaining unchanged inline
+  formatting. Image offers Upload and URL/alt-text tabs, local errors, and guarded
+  async insertion at the saved cursor. Existing URL policies, unrestricted mode,
+  upload hooks, public APIs, and native history remain. Image providers stay deferred.
+
+- Refreshed the HTML toolbar with larger icons and controls across all skins,
+  Paragraph/Text Options/Lists menus, a local emoji palette, and width-based
+  overflow. Table, Image, Code block, Fullscreen, and Source remain direct when
+  space permits. Custom action arrays retain their order and also overflow.
+  Menus open without an editor caret; commands then use an end-of-editor position.
+  Source disables editing controls. MaiDEn stays unchanged.
+
+- Added HTML Fullscreen in visual and Source modes, with Escape, popup priority,
+  native history/selection retention, viewport resizing, iframe-local layout, and
+  teardown/scroll restoration. The default toolbar includes Fullscreen before
+  Source; explicit action lists remain application-owned.
+
+- Removed HTML toolbar error notices. Invalid actions still fail without changing
+  content; table-picker validation stays inside the picker.
+
+- Added compact HTML formatting menus for H1–H6, superscript/subscript,
+  alignment, indentation, remove formatting/unlink, and local font/size/colors.
+  The default H1 menu replaces separate H1/H2 buttons; explicit heading actions
+  remain unchanged. Added native Undo/Redo buttons. Menus retain selection,
+  support keyboard navigation, and reject stale positions. Import filtering
+  remains unchanged, including its restrictions on fonts and inline styles.
+
+- Added ligHTMetaL::Etch as an independent sketch editor: layered drawing,
+  Pen/Highlighter/shapes, selection and erasing, native/raster/restricted SVG
+  import, and native JSON/PNG/SVG export. Preserved its API and drawing history.
+  Added tracked standalone/minified/ESM/CSS builds, a local demo, and unit,
+  Chromium/Firefox, and package checks. Etch v1 acceptance remains incomplete.
+
+- Replaced the Python/Flask example server with a dependency-free Node server.
+  Run `npm run dev`; browser smoke tests no longer need Python or uv.
+
+- Render ordinary images in MaiDEn Preview and Side-by-side by default. Validate
+  HTTP(S), raster base64, and same-origin blob URLs; preserve validated dimensions
+  and loading/decoding hints, strip handlers and unapproved attributes, and suppress
+  referrers. Source editing remains text-only; saved attachment URLs stay intact
+  when applications substitute blobs in renderer output. Rejected images keep text
+  placeholders.
+
 ## 0.6.0
 
 Includes MaiDEn and MeltDown from the unpublished 0.5.0 snapshot below.
